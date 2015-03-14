@@ -19,6 +19,7 @@
 #include <time.h>
 
 #include "filetransfer.h"
+#include <dirent.h>
 
 #include "list.h"
 #include "testdb.h"
@@ -119,11 +120,12 @@ static int my_getattr(const char *path, struct stat *st)
 
     return 0;
   }
-
+  
   //read regular file
   char whole_path[MAX_NAMELEN];
   fullPath(whole_path, path);
   int res;
+  /*
   list_for_each (n, &entries) {
     struct ou_entry* o = list_entry(n, struct ou_entry, node);
     if (strcmp(path + 1, o->name) == 0) {
@@ -135,8 +137,13 @@ static int my_getattr(const char *path, struct stat *st)
       return 0;
     }
   }
+  */
 
-  return -ENOENT;
+  res = lstat(whole_path,st);
+  if(res==-1)
+    return -errno;
+
+  return 0;
 }
 
 static int my_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
@@ -242,7 +249,7 @@ static int my_chmod(const char * path, mode_t new_mode)
   
   //parse list                                                                
   if(strcmp(list_reply,"EMPTY")==0){
-    writeLogFile("Empty!");
+    //writeLogFile("Empty!");
     return res;
   }
 
@@ -300,8 +307,10 @@ static int my_chmod(const char * path, mode_t new_mode)
 	if(db_timestamp<o->tv.tv_sec){
 	  //db_version is older? ignore
 	}else if(db_timestamp==o->tv.tv_sec){
+	  #ifdef DEBUG
 	  writeLogFile(o->name);
 	  writeLogFile("Same Timestamp!");
+	  #endif
 	  //same timestamp, same name, actually we do not need to check md5 now
 	}else{
 	  //db has newer version, acquire it
@@ -319,8 +328,6 @@ static int my_chmod(const char * path, mode_t new_mode)
       file_to_delete++;
     }
   }
-
-  writeLogFile(delete_file[0]);
 
   //delete file not exist in database
   for(i=0; i<file_to_delete; i++){
@@ -341,7 +348,7 @@ static int my_chmod(const char * path, mode_t new_mode)
   for(i=0; i<30; i++){
     if(my_cache_list[i]!=NULL){
       strcat(acquire_list, my_cache_list[i]->name);
-      strcat(acquire_list,",");
+      strcat(acquire_list,":");
       free(my_cache_list[i]);
       my_cache_list[i] = NULL;
     }
@@ -350,7 +357,13 @@ static int my_chmod(const char * path, mode_t new_mode)
   if(strcmp(acquire_list,"")==0){
     strcpy(acquire_list,"EMPTY");
   }
-  writeLogFile(acquire_list);
+  
+  char server_reply[2000];
+  sendList(acquire_list,server_reply);
+  int retry = 0;
+  while(strcmp(server_reply,"REQUEST_OK")!=0 && retry<MAX_RETRY){
+    sendList(acquire_list, server_reply);
+  }
 
   
   //free memory
@@ -539,7 +552,7 @@ static int my_create(const char* path, mode_t mode, struct fuse_file_info* fi)
 
   o = malloc(sizeof(struct ou_entry));
   strcpy(o->name, path + 1); /* skip leading '/' */
-  o->mode = mode | S_IFREG;
+  //o->mode = 0660 | S_IFREG;
   list_add_prev(&o->node, &entries);
 
   char whole_path[MAX_NAMELEN];
@@ -594,6 +607,30 @@ static int my_unlink(const char* path)
   return -ENOENT;
 }
 
+int UpdateList(char* path){
+  DIR* dp;
+  struct dirent* de;
+
+  dp = opendir(path);
+  if(dp==NULL){
+    return -errno;
+  }
+
+  struct ou_entry* o;
+  
+  while((de = readdir(dp))!=NULL){
+    o = malloc(sizeof(struct ou_entry));
+    strcpy(o->name,de->d_name);    
+    list_add_prev(&o->node, &entries);
+  }
+
+  closedir(dp);
+  
+  return 0;
+}
+
+
+
 static struct fuse_operations hello_oper = {
   .getattr= my_getattr,
   .readdir= my_readdir,
@@ -611,12 +648,18 @@ static struct fuse_operations hello_oper = {
   .mkdir = my_mkdir,
 };
 
+
+
+
 int main(int argc, char *argv[])
 {
   #ifdef DEBUG
-  log_file = fopen("/tmp/__my__log__","a");
+  log_file = fopen("/mylog/log","a");
   #endif
+
   list_init(&entries);
+  UpdateList("/tmp/");
+
   int res = fuse_main(argc, argv, &hello_oper, NULL);
   
   #ifdef DEBUG
