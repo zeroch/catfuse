@@ -75,6 +75,7 @@ void update_md5(struct ou_entry* entry){
     sprintf(md5_hex+2*h,"%02x",md5_digest[h]);
   }
 
+#ifdef DB
   postContent(entry->name,(int)entry->tv.tv_sec,md5_hex,server_reply);
   //error checking
   int retry=0;
@@ -83,6 +84,7 @@ void update_md5(struct ou_entry* entry){
     retry++;
   }
   strcpy(entry->md5_hash,md5_hex);
+#endif
 
   #ifdef DEBUG
   writeLogFile(entry->md5_hash);
@@ -244,7 +246,7 @@ static int my_chmod(const char * path, mode_t new_mode)
   char list_reply[2000];
   struct cache_index* my_cache_list[30] = { 0 };
   /* currently use a static array of size 30, if have time may have a linked list */
-  listContent(list_reply);
+  // listContent(list_reply);
 
   
   //parse list                                                                
@@ -453,10 +455,12 @@ static int my_write(const char *path, const char *buf, size_t size,
     struct ou_entry* o = list_entry(n, struct ou_entry, node);
     if (strcmp(path + 1, o->name) == 0) {
       o->tv.tv_sec = time(NULL);
-      update_md5(o);
+      // update_md5(o);
+      transfer_put(o->name);
       return res;
     }
   }
+
 
 
   return res;
@@ -480,8 +484,11 @@ static int my_rename(const char *from, const char *to)
 {
   int res;
   res = rename(from, to);
+  printf("this is rename from: %s, and goto : %s\n", from, to );
+  transfer_get(from, to);
   if (res == -1)
     return -errno;
+
   return 0;
 }
 
@@ -564,7 +571,6 @@ static int my_create(const char* path, mode_t mode, struct fuse_file_info* fi)
   }
 
   fi->fh = res;
-  transfer_init(o->name);
   //writeLogFile("File Created!");
 
   return 0;
@@ -583,19 +589,22 @@ static int my_unlink(const char* path)
     if (strcmp(path + 1, o->name) == 0) {
       __list_del(n);
       res = unlink(whole_path);
+
+      transfer_delete(o->name);
+
       if(res==-1)
-	return -errno;
+	       return -errno;
 
       
       //tell db to delete record
       char server_reply[100];
-      delContent(o->name,server_reply);
+      // delContent(o->name,server_reply);
       int retry=0;
       
-      while(strcmp(server_reply,"DELETE_OK")!=0&&retry<MAX_RETRY){
-	delContent(o->name,server_reply);
-	retry++;
-      }
+ //      while(strcmp(server_reply,"DELETE_OK")!=0&&retry<MAX_RETRY){
+	// delContent(o->name,server_reply);
+	// retry++;
+ //      }
       
 
       free(o);
@@ -658,7 +667,7 @@ int main(int argc, char *argv[])
   #endif
 
   list_init(&entries);
-  UpdateList("/tmp/");
+  UpdateList(ROOT_DIR);
 
   int res = fuse_main(argc, argv, &hello_oper, NULL);
   
