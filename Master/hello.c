@@ -30,9 +30,6 @@ struct ou_entry {
  
 static struct list_node entries;
 
-static const char *hello_str = "Hello World!\n";
-static const char *hello_path = "/hello";
-
 static int my_getattr(const char *path, struct stat *st)
 {
   struct list_node* n;
