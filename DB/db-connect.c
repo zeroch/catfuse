@@ -1,11 +1,10 @@
+#include <my_global.h>
+#include <mysql.h>
 #include <stdio.h>
 #include <sys/socket.h>
 #include <string.h>
 #include <netinet/in.h>
 #include <pthread.h>
-// MYSQL Related
-#include <my_global.h>
-#include <mysql.h>
 
 void finishErr(MYSQL* con);
 void setup(MYSQL* con);
