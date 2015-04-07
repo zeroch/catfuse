@@ -5,7 +5,6 @@
   This program can be distributed under the terms of the GNU GPL.
   See the file COPYING.
 
-  gcc -Wall hello.c `pkg-config fuse --cflags --libs` -o hello
 */
 
 #define FUSE_USE_VERSION 26
@@ -24,6 +23,8 @@
 
 struct ou_entry {
   mode_t mode;
+  struct timespec tv;
+
   struct list_node node;
   char name[MAX_NAMELEN + 1];
 };
@@ -94,6 +95,73 @@ static int my_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 
 }
 
+static int my_utimens(const char *path, const struct timespec ts[2])
+{
+  int res;
+  char whole_path[MAX_NAMELEN];
+  sprintf(whole_path,"/tmp%s",path);
+
+  res = utimensat(0, whole_path, ts, AT_SYMLINK_NOFOLLOW);
+  if (res == -1)
+    return -errno;
+  
+  //maintain our own timestamp
+  struct list_node* n;
+  list_for_each (n, &entries) {
+    struct ou_entry* o = list_entry(n, struct ou_entry, node);
+    if (strcmp(path + 1, o->name) == 0) {
+      //we only keep last modification time, ignore last access time
+      o->tv.tv_sec = ts[1].tv_sec;
+      o->tv.tv_nsec = ts[1].tv_nsec;
+      return 0;
+    }
+  }
+
+  return -ENOENT;
+}
+
+static int my_chmod(const char * path, mode_t new_mode)
+{
+  int res;
+  char whole_path[MAX_NAMELEN];
+  sprintf(whole_path,"/tmp%s",path);
+
+  res = chmod(whole_path, new_mode);
+  if (res == -1)
+    return -errno;
+
+  //maintain our own mode                                                  
+  struct list_node* n;
+  list_for_each (n, &entries) {
+    struct ou_entry* o = list_entry(n, struct ou_entry, node);
+    if (strcmp(path + 1, o->name) == 0) {
+      //we only keep last modification time, ignore last access time           
+      o->mode = new_mode;
+      return 0;
+    }
+  }
+
+  return -ENOENT;
+
+}
+
+static int my_chown(const char * path, uid_t uid, gid_t gid)
+{
+  int res;
+  char whole_path[MAX_NAMELEN];
+  sprintf(whole_path,"/tmp%s",path);
+
+  res = chown(whole_path, uid, gid);
+  if (res == -1)
+    return -errno;
+
+  return 0;
+}
+
+
+
+
+
 static int my_open(const char *path, struct fuse_file_info *fi)
 {
   int res;
@@ -104,27 +172,22 @@ static int my_open(const char *path, struct fuse_file_info *fi)
   if(res==-1)
     return -errno;
 
-  close(res);
-
+  //fill in file handler
+  fi->fh = res;
+  
   return 0;
 }
 
 static int my_read(const char *path, char *buf, size_t size, off_t offset,
 		      struct fuse_file_info *fi)
 {
-  int fd;
-  int res;
-  (void) fi;
-  char whole_path[MAX_NAMELEN];
-  sprintf(whole_path,"/tmp%s",path);
 
-  fd = open(whole_path, O_RDONLY);
-  if (fd == -1)
-    return -errno;
-  res = pread(fd, buf, size, offset);
+  int res;
+
+  res = pread(fi->fh, buf, size, offset);
   if (res == -1)
     res = -errno;
-  close(fd);
+  close(fi->fh);
   return res;
 
 }
@@ -133,22 +196,37 @@ static int my_read(const char *path, char *buf, size_t size, off_t offset,
 static int my_write(const char *path, const char *buf, size_t size,
                      off_t offset, struct fuse_file_info *fi)
 {
-  int fd;
   int res;
-  (void) fi;
-  char whole_path[MAX_NAMELEN];
-  sprintf(whole_path,"/tmp%s",path);
-
-  fd = open(whole_path, O_WRONLY);
-  if (fd == -1)
-    return -errno;
-  res = pwrite(fd, buf, size, offset);
+  
+  res = pwrite(fi->fh, buf, size, offset);
   if (res == -1)
     res = -errno;
-  close(fd);
+  close(fi->fh);
 
   return res;
 
+}
+
+static int my_truncate(const char *path, off_t size)
+{
+  int res;
+ 
+  char whole_path[MAX_NAMELEN];
+  sprintf(whole_path,"/tmp%s",path);
+
+  res = truncate(whole_path, size);
+  if (res == -1)
+    return -errno;
+  return 0;
+}
+
+static int my_rename(const char *from, const char *to)
+{
+  int res;
+  res = rename(from, to);
+  if (res == -1)
+    return -errno;
+  return 0;
 }
 
 static int my_create(const char* path, mode_t mode, struct fuse_file_info* fi)
@@ -177,7 +255,8 @@ static int my_create(const char* path, mode_t mode, struct fuse_file_info* fi)
   if(res==-1){
     return -errno;
   }
-  close(res);
+
+  fi->fh = res;
 
   return 0;
 }
@@ -212,6 +291,11 @@ static struct fuse_operations hello_oper = {
   .write= my_write,
   .create = my_create,
   .unlink = my_unlink,
+  .truncate = my_truncate,
+  .utimens = my_utimens,
+  .rename = my_rename,
+  .chmod = my_chmod,
+  .chown = my_chown,
 };
 
 int main(int argc, char *argv[])
