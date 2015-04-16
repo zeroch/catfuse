@@ -28,6 +28,12 @@ struct ou_entry {
   struct list_node node;
   char name[MAX_NAMELEN + 1];
 };
+
+static void fullPath(char fpath[MAX_NAMELEN], const char * path)
+{
+    strcpy(fpath, "/tmp");
+    strncat(fpath, path, MAX_NAMELEN);
+}
  
 static struct list_node entries;
 
@@ -95,13 +101,41 @@ static int my_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 
 }
 
+static int my_mkdir(const char * path, mode_t mode)
+{
+    int ret = 0;
+    char fpath[MAX_NAMELEN];
+    printf("debug: mkdir(path=\"%s\", mode 0%3o)\n", path, mode);
+    fullPath(fpath, path);
+
+    ret = mkdir(fpath, mode);
+    if (ret < 0)
+    {
+        ret = -errno;
+        printf("error: mkdir mkdir\n");
+    }
+    return ret;
+
+}
+
+
 static int my_utimens(const char *path, const struct timespec ts[2])
 {
   int res;
   char whole_path[MAX_NAMELEN];
   sprintf(whole_path,"/tmp%s",path);
 
+#ifndef OSX 
   res = utimensat(0, whole_path, ts, AT_SYMLINK_NOFOLLOW);
+#else
+  struct timeval tv[2];
+  tv[0].tv_sec = ts[0].tv_sec;
+  tv[0].tv_usec = ts[0].tv_nsec*1000;
+  tv[1].tv_sec = ts[1].tv_sec;
+  tv[1].tv_usec = ts[1].tv_nsec*1000;
+  res = utimes(whole_path, tv);
+#endif
+
   if (res == -1)
     return -errno;
   
@@ -164,7 +198,8 @@ static int my_chown(const char * path, uid_t uid, gid_t gid)
 
 static int my_open(const char *path, struct fuse_file_info *fi)
 {
-  int res;
+  int res = 0;
+  int fd;
   char whole_path[MAX_NAMELEN];
   sprintf(whole_path,"/tmp%s",path);
 
@@ -173,9 +208,9 @@ static int my_open(const char *path, struct fuse_file_info *fi)
     return -errno;
 
   //fill in file handler
-  fi->fh = res;
+  fi->fh = fd;
   
-  return 0;
+  return res;
 }
 
 static int my_read(const char *path, char *buf, size_t size, off_t offset,
@@ -228,6 +263,56 @@ static int my_rename(const char *from, const char *to)
     return -errno;
   return 0;
 }
+
+static int my_mknod(const char *path, mode_t mode, dev_t dev)
+{
+    int ret = 0;
+    char fpath[MAX_NAMELEN];
+    fullPath(fpath, path);
+    
+    // in linux, use mknod(path, mode, rdev), 
+    // this is generic implement, like osx
+    #ifndef OSX
+        ret = mknod(fpath, mode, rdev);
+    #else
+        if (S_ISREG(mode))
+        {
+            ret = open(fpath, O_CREAT | O_EXCL | O_WRONLY, mode);
+            if (ret < 0)
+            {
+                ret = -errno;
+                printf("error: mknod open\n" );
+            }else
+            {
+                ret = close(ret);
+                if (ret < 0)
+                {
+                    ret = -errno;
+                    printf("error: mknod close\n");
+                }
+            }
+        }else if (S_ISFIFO(mode))
+        {
+            ret = mkfifo(fpath, mode);
+            if (ret < 0)
+            {
+                ret = -errno;
+                printf("error: mknod mkfifo\n");
+            }else
+            {
+                ret = mknod(fpath, mode, dev);
+                if (ret < 0)
+                {
+                    ret = -errno;
+                    printf("error: mknod mknod\n");
+                }
+            }
+        }
+    #endif // OSX
+    
+
+}
+
 
 static int my_create(const char* path, mode_t mode, struct fuse_file_info* fi)
 {
@@ -296,6 +381,8 @@ static struct fuse_operations hello_oper = {
   .rename = my_rename,
   .chmod = my_chmod,
   .chown = my_chown,
+  .mknod = my_mknod,
+  .mkdir = my_mkdir,
 };
 
 int main(int argc, char *argv[])
