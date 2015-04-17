@@ -34,31 +34,31 @@ static void fullPath(char fpath[MAX_NAMELEN], const char * path)
     strcpy(fpath, "/tmp");
     strncat(fpath, path, MAX_NAMELEN);
 }
- 
+
 static struct list_node entries;
 
 static int my_getattr(const char *path, struct stat *st)
 {
   struct list_node* n;
- 
+
   memset(st, 0, sizeof(struct stat));
- 
+
   //read directory
 
   if (strcmp(path, "/") == 0) {
     st->st_mode = 0755 | S_IFDIR;
     st->st_nlink = 2;
     st->st_size = 0;
- 
+
     list_for_each (n, &entries) {
       struct ou_entry* o = list_entry(n, struct ou_entry, node);
       ++st->st_nlink;
       st->st_size += strlen(o->name);
     }
- 
+
     return 0;
   }
- 
+
   //read regular file
   char whole_path[MAX_NAMELEN];
   sprintf(whole_path,"/tmp%s",path);
@@ -74,7 +74,7 @@ static int my_getattr(const char *path, struct stat *st)
       return 0;
     }
   }
- 
+
   return -ENOENT;
 }
 
@@ -85,18 +85,18 @@ static int my_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
   (void) fi;
 
   struct list_node* n;
- 
+
   if (strcmp(path, "/") != 0)
     return -ENOENT;
 
   filler(buf, ".", NULL, 0);
   filler(buf, "..", NULL, 0);
-  
+
   list_for_each (n, &entries) {
   struct ou_entry* o = list_entry(n, struct ou_entry, node);
     filler(buf, o->name, NULL, 0);
   }
-   
+
   return 0;
 
 }
@@ -125,7 +125,7 @@ static int my_utimens(const char *path, const struct timespec ts[2])
   char whole_path[MAX_NAMELEN];
   sprintf(whole_path,"/tmp%s",path);
 
-#ifndef OSX 
+#ifndef OSX
   res = utimensat(0, whole_path, ts, AT_SYMLINK_NOFOLLOW);
 #else
   struct timeval tv[2];
@@ -138,7 +138,7 @@ static int my_utimens(const char *path, const struct timespec ts[2])
 
   if (res == -1)
     return -errno;
-  
+
   //maintain our own timestamp
   struct list_node* n;
   list_for_each (n, &entries) {
@@ -164,12 +164,12 @@ static int my_chmod(const char * path, mode_t new_mode)
   if (res == -1)
     return -errno;
 
-  //maintain our own mode                                                  
+  //maintain our own mode
   struct list_node* n;
   list_for_each (n, &entries) {
     struct ou_entry* o = list_entry(n, struct ou_entry, node);
     if (strcmp(path + 1, o->name) == 0) {
-      //we only keep last modification time, ignore last access time           
+      //we only keep last modification time, ignore last access time
       o->mode = new_mode;
       return 0;
     }
@@ -209,7 +209,7 @@ static int my_open(const char *path, struct fuse_file_info *fi)
 
   //fill in file handler
   fi->fh = fd;
-  
+
   return res;
 }
 
@@ -232,7 +232,7 @@ static int my_write(const char *path, const char *buf, size_t size,
                      off_t offset, struct fuse_file_info *fi)
 {
   int res;
-  
+
   res = pwrite(fi->fh, buf, size, offset);
   if (res == -1)
     res = -errno;
@@ -245,7 +245,7 @@ static int my_write(const char *path, const char *buf, size_t size,
 static int my_truncate(const char *path, off_t size)
 {
   int res;
- 
+
   char whole_path[MAX_NAMELEN];
   sprintf(whole_path,"/tmp%s",path);
 
@@ -269,11 +269,11 @@ static int my_mknod(const char *path, mode_t mode, dev_t dev)
     int ret = 0;
     char fpath[MAX_NAMELEN];
     fullPath(fpath, path);
-    
-    // in linux, use mknod(path, mode, rdev), 
+
+    // in linux, use mknod(path, mode, rdev),
     // this is generic implement, like osx
     #ifndef OSX
-        ret = mknod(fpath, mode, rdev);
+        ret = mknod(fpath, mode, dev);
     #else
         if (S_ISREG(mode))
         {
@@ -309,7 +309,7 @@ static int my_mknod(const char *path, mode_t mode, dev_t dev)
             }
         }
     #endif // OSX
-    
+
 
 }
 
@@ -318,16 +318,16 @@ static int my_create(const char* path, mode_t mode, struct fuse_file_info* fi)
 {
   struct ou_entry* o;
   struct list_node* n;
- 
+
   if (strlen(path + 1) > MAX_NAMELEN)
     return -ENAMETOOLONG;
- 
+
   list_for_each (n, &entries) {
     o = list_entry(n, struct ou_entry, node);
     if (strcmp(path + 1, o->name) == 0)
       return -EEXIST;
   }
- 
+
   o = malloc(sizeof(struct ou_entry));
   strcpy(o->name, path + 1); /* skip leading '/' */
   o->mode = mode | S_IFREG;
@@ -345,7 +345,7 @@ static int my_create(const char* path, mode_t mode, struct fuse_file_info* fi)
 
   return 0;
 }
- 
+
 static int my_unlink(const char* path)
 {
   struct list_node *n, *p;
