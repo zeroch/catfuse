@@ -7,7 +7,8 @@ def updateTable(objID,Version):
 	con = MySQLdb.connect('localhost','catfuser','catfuser','testdb')
 	with con:
 		cur = con.cursor()
-		cur.execute("DELETE FROM PhotoObjects WHERE Obj = %s AND Version < %s"%(objID,Version))
+		cur.execute("DELETE FROM PhotoObjects WHERE ObjID = \'%s\' AND Version < %s"%(objID,Version))
+		 
 
 def dbPOST(objID,Version,objHash):
 	updateTable(objID,Version)	
@@ -15,20 +16,21 @@ def dbPOST(objID,Version,objHash):
 		con = MySQLdb.connect('localhost','catfuser','catfuser','testdb')
 		with con:
 			cur = con.cursor()
-			cur.execute("INSERT INTO PhotoObjects VALUES(%s,%s,\'%s\')"%(objID,Version,objHash))
+			cur.execute("INSERT INTO PhotoObjects VALUES(\'%s\',%s,\'%s\')"%(objID,Version,objHash))
 	except:
 		return "POST_ERROR"
 	return "POST_OK"
 
-def dbGET(objID,Version):
+def dbGET(objID):
 	try:
 		con = MySQLdb.connect('localhost','catfuser','catfuser','testdb')
+
 		with con:
 			cur = con.cursor()
-			cur.execute("SELECT PathHash FROM PhotoObjects WHERE ObjID = %s AND Version = %s"%(objID,Version,))
+			cur.execute("SELECT PathHash FROM PhotoObjects WHERE ObjID = \"%s\" ORDER BY Version DESC LIMIT 1"%objID)
 			results = cur.fetchall()
 	except:
-		return "POST_ERROR"		
+		return "GET_ERROR"		
 	return results[0][0]
 
 def clientHandler(clientSock,clientAddr):
@@ -38,12 +40,12 @@ def clientHandler(clientSock,clientAddr):
 		print "Invalid Query" 
 
 	if int(query[0]) == 0: # POST
-
-		msg = dbPOST(int(query[1]),int(query[2]),query[3])
+		msg = dbPOST(query[1],int(query[2]),query[3])
 	elif int(query[0]) == 1: # GET
-		msg = dbGET(query[1],query[2])	
+		msg = dbGET(query[1])	
 	else:
 		msg = "Invalid query"
+
 	clientSock.send(msg)
 	clientSock.close()
 
@@ -52,8 +54,8 @@ def resetDB():
 	with con:
 		cur = con.cursor()
 		cur.execute("DROP TABLE IF EXISTS PhotoObjects")
-		cur.execute("CREATE TABLE PhotoObjects(ObjID INT,Version INT,PathHash VARCHAR(25))")
-		cur.execute("INSERT INTO PhotoObjects VALUES(4,4,\'testhash\')")
+		cur.execute("CREATE TABLE PhotoObjects(ObjID VARCHAR(255),Version INT,PathHash VARCHAR(255))")
+		#cur.execute("INSERT INTO PhotoObjects Values(\'host\',1,\'hash\') ")
 
 def main():
 	resetDB()
