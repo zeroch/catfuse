@@ -19,6 +19,7 @@
 
 
 #include "list.h"
+#include "testdb.h"
 #include "md5.h"
 
 #define MAX_NAMELEN 255
@@ -55,6 +56,9 @@ void update_md5(struct ou_entry* entry){
   MD5_Update(&context, md5_data, strlen(md5_data));
   MD5_Final(entry->md5_hash, &context);
   
+  char server_reply[100];
+  postContent(entry->name,(int)entry->tv.tv_sec,entry->md5_hash,server_reply);
+
   #ifdef DEBUG
   char log_msg[100];
   int i;
@@ -62,6 +66,7 @@ void update_md5(struct ou_entry* entry){
     sprintf(log_msg+i,"%x",entry->md5_hash[i]);
   }
   writeLogFile(log_msg);
+  writeLogFile(server_reply);
   #endif
 }
 
