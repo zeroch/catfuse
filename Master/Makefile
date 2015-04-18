@@ -12,11 +12,14 @@ sys:
 endif
 
 CC := gcc
-hello: hello.o
-	$(CC) -o hello hello.o  $(CCFLAGS)
+hello: hello.o md5.o
+	$(CC) -o hello hello.o md5.o $(CCFLAGS)
 
-hello.o: hello.c list.h
+hello.o: hello.c list.h md5.h
 	$(CC) -c -Wall hello.c  $(CCFLAGS)
+
+md5.o: md5.c md5.h
+	$(CC) -c -Wall md5.c
 
 clean:
 	rm *.o hello
