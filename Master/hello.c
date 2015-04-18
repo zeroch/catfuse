@@ -17,18 +17,55 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+
 #include "list.h"
+#include "md5.h"
 
 #define MAX_NAMELEN 255
+#define DEBUG
+
+extern void MD5_Init(MD5_CTX *ctx);
+extern void MD5_Update(MD5_CTX *ctx, const void *data, unsigned long size);
+extern void MD5_Final(unsigned char *result, MD5_CTX *ctx);
+
+FILE* log_file;
 
 struct ou_entry {
   mode_t mode;
   struct timespec tv;
-
+  unsigned char md5_hash[16];
   struct list_node node;
   char name[MAX_NAMELEN + 1];
 };
 
+void writeLogFile(char* data){
+  #ifdef DEBUG
+
+  fprintf(log_file, "%s\n", data);
+
+  #endif
+}
+
+
+void update_md5(struct ou_entry* entry){
+  char md5_data[MAX_NAMELEN];
+  sprintf(md5_data, "%s%d", entry->name, (int)entry->tv.tv_sec);
+  MD5_CTX context;
+  MD5_Init(&context);
+  MD5_Update(&context, md5_data, strlen(md5_data));
+  MD5_Final(entry->md5_hash, &context);
+  
+  #ifdef DEBUG
+  char log_msg[100];
+  int i;
+  for(i=0;i<16;i++){
+    sprintf(log_msg+i,"%x",entry->md5_hash[i]);
+  }
+  writeLogFile(log_msg);
+  #endif
+}
+
+  
 static void fullPath(char fpath[MAX_NAMELEN], const char * path)
 {
     strcpy(fpath, "/tmp");
@@ -130,9 +167,9 @@ static int my_utimens(const char *path, const struct timespec ts[2])
 #else
   struct timeval tv[2];
   tv[0].tv_sec = ts[0].tv_sec;
-  tv[0].tv_usec = ts[0].tv_nsec*1000;
+  tv[0].tv_usec = ts[0].tv_nsec/1000;
   tv[1].tv_sec = ts[1].tv_sec;
-  tv[1].tv_usec = ts[1].tv_nsec*1000;
+  tv[1].tv_usec = ts[1].tv_nsec/1000;
   res = utimes(whole_path, tv);
 #endif
 
@@ -147,6 +184,7 @@ static int my_utimens(const char *path, const struct timespec ts[2])
       //we only keep last modification time, ignore last access time
       o->tv.tv_sec = ts[1].tv_sec;
       o->tv.tv_nsec = ts[1].tv_nsec;
+      update_md5(o);
       return 0;
     }
   }
@@ -199,7 +237,6 @@ static int my_chown(const char * path, uid_t uid, gid_t gid)
 static int my_open(const char *path, struct fuse_file_info *fi)
 {
   int res = 0;
-  int fd;
   char whole_path[MAX_NAMELEN];
   sprintf(whole_path,"/tmp%s",path);
 
@@ -208,9 +245,9 @@ static int my_open(const char *path, struct fuse_file_info *fi)
     return -errno;
 
   //fill in file handler
-  fi->fh = fd;
+  fi->fh = res;
 
-  return res;
+  return 0;
 }
 
 static int my_read(const char *path, char *buf, size_t size, off_t offset,
@@ -238,6 +275,8 @@ static int my_write(const char *path, const char *buf, size_t size,
     res = -errno;
   close(fi->fh);
 
+  /*after test db, I'll decide whether to update hash here*/
+
   return res;
 
 }
@@ -263,6 +302,7 @@ static int my_rename(const char *from, const char *to)
     return -errno;
   return 0;
 }
+
 
 static int my_mknod(const char *path, mode_t mode, dev_t dev)
 {
@@ -310,7 +350,7 @@ static int my_mknod(const char *path, mode_t mode, dev_t dev)
         }
     #endif // OSX
 
-
+    return ret;
 }
 
 
@@ -342,6 +382,8 @@ static int my_create(const char* path, mode_t mode, struct fuse_file_info* fi)
   }
 
   fi->fh = res;
+
+  //writeLogFile("File Created!");
 
   return 0;
 }
@@ -387,7 +429,16 @@ static struct fuse_operations hello_oper = {
 
 int main(int argc, char *argv[])
 {
+  #ifdef DEBUG
+  log_file = fopen("/tmp/__my__log__","a");
+  #endif
   list_init(&entries);
-  return fuse_main(argc, argv, &hello_oper, NULL);
+  int res = fuse_main(argc, argv, &hello_oper, NULL);
+  
+  #ifdef DEBUG
+  fclose(log_file);
+  #endif
+
+  return res;
 }
 
