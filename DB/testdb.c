@@ -4,9 +4,9 @@
 #include <string.h>  
 
 void getContent(char*,char*);
-void postContent(char*,int,char*,char*);
+void postContent(char*,int,unsigned char*,char*);
 
-void postContent(char* obj, int version, char* hash,char* server_reply){
+void postContent(char* obj, int version, unsigned char* hash,char* server_reply){
     struct sockaddr_in server;
     int sockfd = socket(AF_INET,SOCK_STREAM,0);
     char message[1024];
@@ -70,9 +70,9 @@ int main(int argc,char* argv[]){
     
 
     char objID[255]={};
-    char hashPath1[2000]={};
+    unsigned char hashPath1[2000]={};
     char output[2000]={};
-    char hashPath2[2000]={};
+    unsigned char hashPath2[2000]={};
 
     strcpy(objID,"host");
     strcpy(hashPath1,"hash");
