@@ -1,8 +1,6 @@
-# catfuse
-It is a project to use fuse library to implement a replicate photo file system.
- 
+Install the MySQL C Development Library:
+sudo apt-get install libmysqlclient-dev
 
-*Comment:
-settimestamp function is not implemented yet so there will be warning when touching files.
-real files are saved in /tmp/ directory currently
-Connection to database are supposed to be added after file writing currently, I think it is easier to write than writing a seperate 'push' command for it.
+For GNU C compiler, need to add -std=99 option
+To compile:
+gcc -o db-connect -std=c99 -I/usr/include/mysql db-connect.c $(mysql_config --libs)
