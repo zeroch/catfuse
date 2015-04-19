@@ -25,7 +25,7 @@
 
 #define MAX_RETRY 3
 #define MAX_NAMELEN 255
-//#define DEBUG
+#define DEBUG
 #define REPLICA
 
 
@@ -227,9 +227,11 @@ static int my_chmod(const char * path, mode_t new_mode)
   if (res == -1)
     return -errno;
 
-
+  struct list_node *n;
 
   #ifdef REPLICA
+
+  struct list_node *p;
 
   //get list                                                                  
   char list_reply[2000];
@@ -244,7 +246,8 @@ static int my_chmod(const char * path, mode_t new_mode)
     return res;
   }
 
-  
+  char delete_file[30][MAX_NAMELEN];
+  int file_to_delete = 0;
   int i;
   int obj_num=0;
   int obj_field=0;
@@ -286,8 +289,7 @@ static int my_chmod(const char * path, mode_t new_mode)
 
   char acquire_list[2000];
   strcpy(acquire_list, "");
-  //compare two lists
-  struct list_node* n;
+
 
   //search newer version
   list_for_each (n, &entries) {
@@ -311,6 +313,28 @@ static int my_chmod(const char * path, mode_t new_mode)
 	break;
       }
     }
+    //file not found, build delete list
+    if(i==30){
+      strcpy(delete_file[file_to_delete],o->name);
+      file_to_delete++;
+    }
+  }
+
+  writeLogFile(delete_file[0]);
+
+  //delete file not exist in database
+  for(i=0; i<file_to_delete; i++){
+    list_for_each_safe (n, p, &entries) {
+      struct ou_entry* o = list_entry(n, struct ou_entry, node);
+      if (strcmp(delete_file[i], o->name) == 0) {
+	__list_del(n);
+	char fullpath[MAX_NAMELEN];
+	fullPath(fullpath, o->name);
+	unlink(fullpath);
+	free(o);
+	break;
+      }
+    }
   }
 
   //search new file
@@ -324,7 +348,7 @@ static int my_chmod(const char * path, mode_t new_mode)
   }
 
   if(strcmp(acquire_list,"")==0){
-    strcpy(acquire_list,"Empty!");
+    strcpy(acquire_list,"EMPTY");
   }
   writeLogFile(acquire_list);
 
@@ -561,7 +585,7 @@ static int my_unlink(const char* path)
       }
       
 
-      //free(o);
+      free(o);
       return res;
     }
   }
