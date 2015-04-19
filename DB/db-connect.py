@@ -89,9 +89,9 @@ def resetDB():
 		cur.execute("DROP TABLE IF EXISTS PhotoObjects")
 		cur.execute("CREATE TABLE PhotoObjects(ObjID VARCHAR(255),Version INT,PathHash CHAR(32))")
 		#cur.execute("INSERT INTO PhotoObjects Values(\'host\',1,\'%s\') " %(str(m.hexdigest())))
-		cur.execute("INSERT INTO PhotoObjects Values(\'A\',1,\'A\')");
-		cur.execute("INSERT INTO PhotoObjects Values(\'B\',1,\'B\')");
-		cur.execute("INSERT INTO PhotoObjects Values(\'C\',1,\'C\')");
+		#cur.execute("INSERT INTO PhotoObjects Values(\'A\',1,\'A\')");
+		#cur.execute("INSERT INTO PhotoObjects Values(\'B\',1,\'B\')");
+		#cur.execute("INSERT INTO PhotoObjects Values(\'C\',1,\'C\')");
 
 		#cur.execute("SELECT * FROM PhotoObjects")
 		#msg = ""
