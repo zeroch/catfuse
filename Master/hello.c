@@ -25,7 +25,7 @@
 
 #define MAX_RETRY 3
 #define MAX_NAMELEN 255
-#define DEBUG
+//#define DEBUG
 #define REPLICA
 
 
@@ -36,10 +36,10 @@ extern void MD5_Final(unsigned char *result, MD5_CTX *ctx);
 FILE* log_file;
 
 struct ou_entry {
+  struct list_node node;
   mode_t mode;
   struct timespec tv;
-  char md5_hash[32];
-  struct list_node node;
+  char md5_hash[33];
   char name[MAX_NAMELEN + 1];
 };
 
@@ -60,6 +60,7 @@ void writeLogFile(char* data){
 
 void update_md5(struct ou_entry* entry){
   char md5_data[MAX_NAMELEN];
+  char md5_hex[33];
   unsigned char md5_digest[16];
   sprintf(md5_data, "%s%d", entry->name, (int)entry->tv.tv_sec);
   MD5_CTX context;
@@ -70,17 +71,17 @@ void update_md5(struct ou_entry* entry){
   char server_reply[100];
   int h;
   for(h=0;h<16;h++){
-    sprintf(entry->md5_hash+2*h,"%02x",md5_digest[h]);
+    sprintf(md5_hex+2*h,"%02x",md5_digest[h]);
   }
 
-  postContent(entry->name,(int)entry->tv.tv_sec,entry->md5_hash,server_reply);
+  postContent(entry->name,(int)entry->tv.tv_sec,md5_hex,server_reply);
   //error checking
   int retry=0;
   while(strcmp(server_reply,"POST_OK")!=0 && retry<MAX_RETRY){
-    postContent(entry->name,(int)entry->tv.tv_sec,entry->md5_hash,server_reply);
+    postContent(entry->name,(int)entry->tv.tv_sec,md5_hex,server_reply);
     retry++;
   }
-
+  strcpy(entry->md5_hash,md5_hex);
 
   #ifdef DEBUG
   writeLogFile(entry->md5_hash);
@@ -535,6 +536,8 @@ static int my_create(const char* path, mode_t mode, struct fuse_file_info* fi)
 static int my_unlink(const char* path)
 {
   struct list_node *n, *p;
+  
+
   char whole_path[MAX_NAMELEN];
   sprintf(whole_path,"/tmp%s",path);
   int res;
@@ -542,11 +545,11 @@ static int my_unlink(const char* path)
     struct ou_entry* o = list_entry(n, struct ou_entry, node);
     if (strcmp(path + 1, o->name) == 0) {
       __list_del(n);
-      free(o);
       res = unlink(whole_path);
       if(res==-1)
 	return -errno;
 
+      
       //tell db to delete record
       char server_reply[100];
       delContent(o->name,server_reply);
@@ -556,7 +559,9 @@ static int my_unlink(const char* path)
 	delContent(o->name,server_reply);
 	retry++;
       }
+      
 
+      //free(o);
       return res;
     }
   }
