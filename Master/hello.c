@@ -23,8 +23,11 @@
 #include "testdb.h"
 #include "md5.h"
 
+#define MAX_RETRY 3
 #define MAX_NAMELEN 255
 #define DEBUG
+#define REPLICA
+
 
 extern void MD5_Init(MD5_CTX *ctx);
 extern void MD5_Update(MD5_CTX *ctx, const void *data, unsigned long size);
@@ -35,9 +38,15 @@ FILE* log_file;
 struct ou_entry {
   mode_t mode;
   struct timespec tv;
-  unsigned char md5_hash[16];
+  char md5_hash[32];
   struct list_node node;
   char name[MAX_NAMELEN + 1];
+};
+
+struct cache_index{
+  char name[MAX_NAMELEN + 1];
+  char version[20];
+  char md5_hash[32];
 };
 
 void writeLogFile(char* data){
@@ -51,27 +60,30 @@ void writeLogFile(char* data){
 
 void update_md5(struct ou_entry* entry){
   char md5_data[MAX_NAMELEN];
+  unsigned char md5_digest[16];
   sprintf(md5_data, "%s%d", entry->name, (int)entry->tv.tv_sec);
   MD5_CTX context;
   MD5_Init(&context);
   MD5_Update(&context, md5_data, strlen(md5_data));
-  MD5_Final(entry->md5_hash, &context);
+  MD5_Final(md5_digest, &context);
   
   char server_reply[100];
-  char hexdigest[32];
   int h;
   for(h=0;h<16;h++){
-    sprintf(hexdigest+h,"%02x",entry->md5_hash[h]);
+    sprintf(entry->md5_hash+2*h,"%02x",md5_digest[h]);
   }
-  postContent(entry->name,(int)entry->tv.tv_sec,hexdigest,server_reply);
+
+  postContent(entry->name,(int)entry->tv.tv_sec,entry->md5_hash,server_reply);
+  //error checking
+  int retry=0;
+  while(strcmp(server_reply,"POST_OK")!=0 && retry<MAX_RETRY){
+    postContent(entry->name,(int)entry->tv.tv_sec,entry->md5_hash,server_reply);
+    retry++;
+  }
+
 
   #ifdef DEBUG
-  char log_msg[100];
-  int i;
-  for(i=0;i<16;i++){
-    sprintf(log_msg+i,"%x",entry->md5_hash[i]);
-  }
-  writeLogFile(log_msg);
+  writeLogFile(entry->md5_hash);
   writeLogFile(server_reply);
   #endif
 }
@@ -99,9 +111,9 @@ static int my_getattr(const char *path, struct stat *st)
     st->st_size = 0;
 
     list_for_each (n, &entries) {
-      struct ou_entry* o = list_entry(n, struct ou_entry, node);
+      //struct ou_entry* o = list_entry(n, struct ou_entry, node);
       ++st->st_nlink;
-      st->st_size += strlen(o->name);
+      st->st_size += 1;
     }
 
     return 0;
@@ -162,6 +174,7 @@ static int my_mkdir(const char * path, mode_t mode)
         ret = -errno;
         printf("error: mkdir mkdir\n");
     }
+
     return ret;
 
 }
@@ -213,8 +226,119 @@ static int my_chmod(const char * path, mode_t new_mode)
   if (res == -1)
     return -errno;
 
-  //maintain our own mode
+
+
+  #ifdef REPLICA
+
+  //get list                                                                  
+  char list_reply[2000];
+  struct cache_index* my_cache_list[30] = { 0 };
+  /* currently use a static array of size 30, if have time may have a linked list */
+  listContent(list_reply);
+
+  
+  //parse list                                                                
+  if(strcmp(list_reply,"EMPTY")==0){
+    writeLogFile("Empty!");
+    return res;
+  }
+
+  
+  int i;
+  int obj_num=0;
+  int obj_field=0;
+  int infield_index=0;
+  for(i=0;i<2000;i++){
+    char tmp_char = list_reply[i];
+    if(tmp_char==')'){
+      obj_num++;
+      obj_field = 0;
+      infield_index=0;
+      if(list_reply[i+1]!='('){
+	break;
+      }
+    }else if(tmp_char=='('){
+      //initialize object                                                                   
+      my_cache_list[obj_num] = malloc(sizeof(struct cache_index));
+      memset(my_cache_list[obj_num]->name,0,MAX_NAMELEN+1);
+      memset(my_cache_list[obj_num]->version,0,20);
+      memset(my_cache_list[obj_num]->md5_hash,0,32);
+    }else if(tmp_char==','){
+      obj_field++;
+      infield_index=0;
+    }else{
+      switch(obj_field){
+      case 0:
+	my_cache_list[obj_num]->name[infield_index] = tmp_char;
+	break;
+      case 1:
+	my_cache_list[obj_num]->version[infield_index] = tmp_char;
+	break;
+      case 2:
+	my_cache_list[obj_num]->md5_hash[infield_index] = tmp_char;
+	break;
+      }
+      infield_index++;
+    }
+
+  }
+
+  char acquire_list[2000];
+  strcpy(acquire_list, "");
+  //compare two lists
   struct list_node* n;
+
+  //search newer version
+  list_for_each (n, &entries) {
+    struct ou_entry* o = list_entry(n, struct ou_entry, node);
+    for(i=0; i<30; i++){
+      if(my_cache_list[i]!=NULL && strcmp(my_cache_list[i]->name,o->name)==0){
+	int db_timestamp = atoi(my_cache_list[i]->version);
+	if(db_timestamp<o->tv.tv_sec){
+	  //db_version is older? ignore
+	}else if(db_timestamp==o->tv.tv_sec){
+	  writeLogFile(o->name);
+	  writeLogFile("Same Timestamp!");
+	  //same timestamp, same name, actually we do not need to check md5 now
+	}else{
+	  //db has newer version, acquire it
+	  strcat(acquire_list,o->name);
+	  strcat(acquire_list,",");
+	}
+	free(my_cache_list[i]);
+	my_cache_list[i] = NULL;
+	break;
+      }
+    }
+  }
+
+  //search new file
+  for(i=0; i<30; i++){
+    if(my_cache_list[i]!=NULL){
+      strcat(acquire_list, my_cache_list[i]->name);
+      strcat(acquire_list,",");
+      free(my_cache_list[i]);
+      my_cache_list[i] = NULL;
+    }
+  }
+
+  if(strcmp(acquire_list,"")==0){
+    strcpy(acquire_list,"Empty!");
+  }
+  writeLogFile(acquire_list);
+
+  
+  //free memory
+  /*int cur_obj;
+  for(cur_obj=0;cur_obj<obj_num;cur_obj++){
+    free(my_cache_list[cur_obj]);
+  }*/
+
+  #endif
+
+
+
+  //maintain our own mode
   list_for_each (n, &entries) {
     struct ou_entry* o = list_entry(n, struct ou_entry, node);
     if (strcmp(path + 1, o->name) == 0) {
@@ -422,6 +546,17 @@ static int my_unlink(const char* path)
       res = unlink(whole_path);
       if(res==-1)
 	return -errno;
+
+      //tell db to delete record
+      char server_reply[100];
+      delContent(o->name,server_reply);
+      int retry=0;
+      
+      while(strcmp(server_reply,"DELETE_OK")!=0&&retry<MAX_RETRY){
+	delContent(o->name,server_reply);
+	retry++;
+      }
+
       return res;
     }
   }
