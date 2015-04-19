@@ -1,8 +1,9 @@
 #include "testdb.h"
 
-#define DB_IP "128.61.24.181"
+//#define DB_IP "128.61.24.181"
+#define DB_IP "127.0.0.1"
 
-void postContent(char* obj, int version, unsigned char* hash,char* server_reply){
+void postContent(char* obj, int version, char* hash,char* server_reply){
   struct sockaddr_in server;
   int sockfd = socket(AF_INET,SOCK_STREAM,0);
   char message[1024];
@@ -42,7 +43,7 @@ void getContent(char* obj, char* server_reply){
     puts("Crete Socket Error");
     return;
   }
-  server.sin_addr.s_addr = inet_addr("127.0.0.1");
+  server.sin_addr.s_addr = inet_addr(DB_IP);
   server.sin_family = AF_INET;
   server.sin_port = htons(12345);
 

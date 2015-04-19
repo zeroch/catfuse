@@ -16,6 +16,7 @@
 #include <fcntl.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <time.h>
 
 
 #include "list.h"
@@ -57,7 +58,12 @@ void update_md5(struct ou_entry* entry){
   MD5_Final(entry->md5_hash, &context);
   
   char server_reply[100];
-  postContent(entry->name,(int)entry->tv.tv_sec,entry->md5_hash,server_reply);
+  char hexdigest[32];
+  int h;
+  for(h=0;h<16;h++){
+    sprintf(hexdigest+h,"%02x",entry->md5_hash[h]);
+  }
+  postContent(entry->name,(int)entry->tv.tv_sec,hexdigest,server_reply);
 
   #ifdef DEBUG
   char log_msg[100];
@@ -280,7 +286,16 @@ static int my_write(const char *path, const char *buf, size_t size,
     res = -errno;
   close(fi->fh);
 
-  /*after test db, I'll decide whether to update hash here*/
+  struct list_node* n;
+  list_for_each (n, &entries) {
+    struct ou_entry* o = list_entry(n, struct ou_entry, node);
+    if (strcmp(path + 1, o->name) == 0) {
+      o->tv.tv_sec = time(NULL);
+      update_md5(o);
+      return res;
+    }
+  }
+
 
   return res;
 
