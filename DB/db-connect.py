@@ -2,6 +2,7 @@
 import MySQLdb
 import socket
 import thread
+import hashlib
 
 def updateTable(objID,Version):
 	con = MySQLdb.connect('localhost','catfuser','catfuser','testdb')
@@ -24,7 +25,6 @@ def dbPOST(objID,Version,objHash):
 def dbGET(objID):
 	try:
 		con = MySQLdb.connect('localhost','catfuser','catfuser','testdb')
-
 		with con:
 			cur = con.cursor()
 			cur.execute("SELECT PathHash FROM PhotoObjects WHERE ObjID = \"%s\" ORDER BY Version DESC LIMIT 1"%objID)
@@ -32,6 +32,30 @@ def dbGET(objID):
 	except:
 		return "GET_ERROR"		
 	return results[0][0]
+
+def dbDELETE(objID):
+	try:
+		con = MySQLdb.connect('localhost','catfuser','catfuser','testdb')
+		with con:
+			cur = con.cursor()
+			cur.execute("DELETE FROM PhotoObjects WHERE ObjID = \"%s\""%objID)
+	except:
+		return "DELETE_ERROR"
+	return "DELETE_OK"
+
+def dbLIST():
+	msg = ""
+	try:
+		con = MySQLdb.connect('localhost','catfuser','catfuser','testdb')
+		with con:
+			cur = con.cursor()
+			cur.execute("SELECT * FROM PhotoObjects")
+			rows = cur.fetchall()
+			for row in rows:
+				msg = msg + "(%s,%s,%s)" % (row[0],row[1],row[2])
+	except:
+		return "LIST_ERROR"
+	return msg			
 
 def clientHandler(clientSock,clientAddr):
 	try:
@@ -42,20 +66,39 @@ def clientHandler(clientSock,clientAddr):
 	if int(query[0]) == 0: # POST
 		msg = dbPOST(query[1],int(query[2]),query[3])
 	elif int(query[0]) == 1: # GET
-		msg = dbGET(query[1])	
+		msg = dbGET(query[1])
+	elif int(query[0]) == 2: # DELETE
+		msg = dbDELETE(query[1])
+	elif int(query[0]) == 3: # LIST
+		msg = dbLIST()
+		if len(msg) == 0:
+			msg = "EMPTY" 	
 	else:
-		msg = "Invalid query"
+		msg = "Invalid Query"
 
 	clientSock.send(msg)
 	clientSock.close()
 
 def resetDB():
+	#m = hashlib.md5()
+	#m.update("hashcode")
+	#print "******\n"+str(m.hexdigest())+"\n******\n"
 	con = MySQLdb.connect('localhost','catfuser','catfuser','testdb')
 	with con:
 		cur = con.cursor()
 		cur.execute("DROP TABLE IF EXISTS PhotoObjects")
-		cur.execute("CREATE TABLE PhotoObjects(ObjID VARCHAR(255),Version INT,PathHash VARCHAR(255))")
-		#cur.execute("INSERT INTO PhotoObjects Values(\'host\',1,\'hash\') ")
+		cur.execute("CREATE TABLE PhotoObjects(ObjID VARCHAR(255),Version INT,PathHash CHAR(32))")
+		#cur.execute("INSERT INTO PhotoObjects Values(\'host\',1,\'%s\') " %(str(m.hexdigest())))
+		#cur.execute("INSERT INTO PhotoObjects Values(\'A\',1,\'A\')");
+		#cur.execute("INSERT INTO PhotoObjects Values(\'B\',1,\'B\')");
+		#cur.execute("INSERT INTO PhotoObjects Values(\'C\',1,\'C\')");
+
+		#cur.execute("SELECT * FROM PhotoObjects")
+		#msg = ""
+		#rows = cur.fetchall()
+		#for row in rows:
+		#	msg = msg + "(%s,%s,%s)" % (row[0],row[1],row[2])
+	#print msg
 
 def main():
 	resetDB()
