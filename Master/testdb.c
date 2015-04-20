@@ -125,3 +125,33 @@ void getContent(char* obj, char* server_reply){
   //return server_reply;
 
 } 
+
+void sendList(char* objList, char* server_reply){
+  struct sockaddr_in server;
+  int sockfd = socket(AF_INET,SOCK_STREAM,0);
+  char message[2000];
+  sprintf(message,"4,%s",objList);
+  
+  if (sockfd < 0){
+    puts("Crete Socket Error");
+    return;
+  }
+  server.sin_addr.s_addr = inet_addr("127.0.0.1");
+  server.sin_family = AF_INET;
+  server.sin_port = htons(12345);
+
+  if (connect(sockfd,(struct sockaddr*)&server,sizeof(server))<0){
+    puts("Connection Error");
+    return;
+  }
+  if(send(sockfd,message,strlen(message),0)<0){
+    puts("Send failed");
+    return;
+  }
+  if(recv(sockfd,server_reply,2000,0)<0){
+    puts("Receive Failed");
+    return;
+  }
+  close(sockfd);
+  //return server_reply;
+}
