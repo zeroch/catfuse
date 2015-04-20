@@ -18,6 +18,7 @@
 #include <unistd.h>
 #include <time.h>
 
+#include "filetransfer.h"
 
 #include "list.h"
 #include "testdb.h"
@@ -28,7 +29,6 @@
 #define DEBUG
 #define REPLICA
 
-#define ROOT_DIR "/home/zechen/fuse"
 extern void MD5_Init(MD5_CTX *ctx);
 extern void MD5_Update(MD5_CTX *ctx, const void *data, unsigned long size);
 extern void MD5_Final(unsigned char *result, MD5_CTX *ctx);
@@ -551,7 +551,7 @@ static int my_create(const char* path, mode_t mode, struct fuse_file_info* fi)
   }
 
   fi->fh = res;
-
+  transfer_init(o->name);
   //writeLogFile("File Created!");
 
   return 0;

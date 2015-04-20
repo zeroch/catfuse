@@ -12,17 +12,20 @@ sys:
 endif
 
 CC := gcc
-hello: hello.o md5.o testdb.o
-	$(CC) -o hello hello.o md5.o testdb.o $(CCFLAGS)
+hello: hello.o md5.o testdb.o filetransfer.o
+	$(CC) -o hello hello.o md5.o testdb.o filetransfer.o $(CCFLAGS)  -lcurl
 
-hello.o: hello.c list.h md5.h testdb.h
-	$(CC) -c -Wall hello.c  $(CCFLAGS)
+hello.o: hello.c list.h md5.h testdb.h filetransfer.h
+	$(CC) -c -Wall hello.c  $(CCFLAGS) -lcurl
 
 md5.o: md5.c md5.h
 	$(CC) -c -Wall md5.c
 
 testdb.o: testdb.c testdb.h
 	$(CC) -c -Wall testdb.c
+filetransfer.o: filetransfer.c filetransfer.h
+	$(CC) -c -Wall filetransfer.c -lcurl
+
 
 clean:
 	rm *.o hello
