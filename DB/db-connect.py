@@ -57,8 +57,7 @@ def dbLIST():
 		return "LIST_ERROR"
 	return msg			
 
-<<<<<<< HEAD
-=======
+
 def dbREQ(requestFile,clientSock,clientAddr):
 	requestList = requestFile.split(":")
 	strReq = ""
@@ -87,13 +86,13 @@ def contactMasterNode(reqMSG):
 				break
 			else:
 				print recvdata
+				break
 		except socket.error,e:
 			print "Cannot contact the master node"
 			break
 
 	clientSock.close()
 
->>>>>>> ec63cb4a15de600ef29ad60912e2a955d9ade4e0
 def clientHandler(clientSock,clientAddr):
 	try:
 		query = clientSock.recv(1024).split(",")
@@ -109,13 +108,9 @@ def clientHandler(clientSock,clientAddr):
 	elif int(query[0]) == 3: # LIST
 		msg = dbLIST()
 		if len(msg) == 0:
-<<<<<<< HEAD
 			msg = "EMPTY" 	
-=======
-			msg = "EMPTY"
 	elif int(query[0]) == 4: # REQUEST_FILE
 		msg = dbREQ(query[1],clientSock,clientAddr) 	
->>>>>>> ec63cb4a15de600ef29ad60912e2a955d9ade4e0
 	else:
 		msg = "Invalid Query"
 
