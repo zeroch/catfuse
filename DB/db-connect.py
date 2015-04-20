@@ -57,6 +57,43 @@ def dbLIST():
 		return "LIST_ERROR"
 	return msg			
 
+<<<<<<< HEAD
+=======
+def dbREQ(requestFile,clientSock,clientAddr):
+	requestList = requestFile.split(":")
+	strReq = ""
+
+	for reqfile in requestList:
+		strReq = strReq + "," + reqfile
+		
+	reqMSG = clientAddr[0] + strReq
+	thread.start_new_thread(contactMasterNode,(reqMSG,))
+
+	return "REQUEST_OK"
+
+def contactMasterNode(reqMSG):
+	master = "localhost"
+	port = 12346
+	buf = 1234
+
+	clientSock = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+	clientSock.connect((master,port))
+
+	while True:
+		try:
+			clientSock.send(reqMSG)
+			recvdata = clientSock.recv(buf)
+			if not recvdata:
+				break
+			else:
+				print recvdata
+		except socket.error,e:
+			print "Cannot contact the master node"
+			break
+
+	clientSock.close()
+
+>>>>>>> ec63cb4a15de600ef29ad60912e2a955d9ade4e0
 def clientHandler(clientSock,clientAddr):
 	try:
 		query = clientSock.recv(1024).split(",")
@@ -72,7 +109,13 @@ def clientHandler(clientSock,clientAddr):
 	elif int(query[0]) == 3: # LIST
 		msg = dbLIST()
 		if len(msg) == 0:
+<<<<<<< HEAD
 			msg = "EMPTY" 	
+=======
+			msg = "EMPTY"
+	elif int(query[0]) == 4: # REQUEST_FILE
+		msg = dbREQ(query[1],clientSock,clientAddr) 	
+>>>>>>> ec63cb4a15de600ef29ad60912e2a955d9ade4e0
 	else:
 		msg = "Invalid Query"
 
