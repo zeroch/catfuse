@@ -28,7 +28,7 @@
 #define DEBUG
 #define REPLICA
 
-
+#define ROOT_DIR "/home/zechen/fuse"
 extern void MD5_Init(MD5_CTX *ctx);
 extern void MD5_Update(MD5_CTX *ctx, const void *data, unsigned long size);
 extern void MD5_Final(unsigned char *result, MD5_CTX *ctx);
@@ -92,7 +92,7 @@ void update_md5(struct ou_entry* entry){
   
 static void fullPath(char fpath[MAX_NAMELEN], const char * path)
 {
-    strcpy(fpath, "/tmp");
+    strcpy(fpath, ROOT_DIR);
     strncat(fpath, path, MAX_NAMELEN);
 }
 
@@ -122,7 +122,7 @@ static int my_getattr(const char *path, struct stat *st)
 
   //read regular file
   char whole_path[MAX_NAMELEN];
-  sprintf(whole_path,"/tmp%s",path);
+  fullPath(whole_path, path);
   int res;
   list_for_each (n, &entries) {
     struct ou_entry* o = list_entry(n, struct ou_entry, node);
@@ -185,7 +185,7 @@ static int my_utimens(const char *path, const struct timespec ts[2])
 {
   int res;
   char whole_path[MAX_NAMELEN];
-  sprintf(whole_path,"/tmp%s",path);
+  fullPath(whole_path, path);
 
 #ifndef OSX
   res = utimensat(0, whole_path, ts, AT_SYMLINK_NOFOLLOW);
@@ -221,7 +221,7 @@ static int my_chmod(const char * path, mode_t new_mode)
 {
   int res;
   char whole_path[MAX_NAMELEN];
-  sprintf(whole_path,"/tmp%s",path);
+  fullPath(whole_path, path);
 
   res = chmod(whole_path, new_mode);
   if (res == -1)
@@ -381,7 +381,7 @@ static int my_chown(const char * path, uid_t uid, gid_t gid)
 {
   int res;
   char whole_path[MAX_NAMELEN];
-  sprintf(whole_path,"/tmp%s",path);
+  fullPath(whole_path, path);
 
   res = chown(whole_path, uid, gid);
   if (res == -1)
@@ -398,7 +398,7 @@ static int my_open(const char *path, struct fuse_file_info *fi)
 {
   int res = 0;
   char whole_path[MAX_NAMELEN];
-  sprintf(whole_path,"/tmp%s",path);
+  fullPath(whole_path, path);
 
   res = open(whole_path, fi->flags);
   if(res==-1)
@@ -455,7 +455,7 @@ static int my_truncate(const char *path, off_t size)
   int res;
 
   char whole_path[MAX_NAMELEN];
-  sprintf(whole_path,"/tmp%s",path);
+  fullPath(whole_path, path);
 
   res = truncate(whole_path, size);
   if (res == -1)
@@ -543,7 +543,7 @@ static int my_create(const char* path, mode_t mode, struct fuse_file_info* fi)
   list_add_prev(&o->node, &entries);
 
   char whole_path[MAX_NAMELEN];
-  sprintf(whole_path,"/tmp%s",path);
+  fullPath(whole_path, path);
 
   int res = creat(whole_path, S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP);
   if(res==-1){
@@ -563,7 +563,7 @@ static int my_unlink(const char* path)
   
 
   char whole_path[MAX_NAMELEN];
-  sprintf(whole_path,"/tmp%s",path);
+  fullPath(whole_path, path);
   int res;
   list_for_each_safe (n, p, &entries) {
     struct ou_entry* o = list_entry(n, struct ou_entry, node);
