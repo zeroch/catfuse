@@ -4,15 +4,39 @@ import socket
 import thread
 import hashlib
 
+MAX_REPLICA = 6 #The maximum number of Replica Nodes here
+REPLICA_COUNT = MAX_REPLICA #Keep track of how many replica can still register until table is full
+REPLICA_PER_FILE = MAX_REPLICA / 2 #Number of Replica to upload a file to
+RANDOM_NUMBER = 4 #Used to randomly determine ReplicaID to upload a file to in whichReplicaID Function
+
 def updateTable(objID,Version):
 	con = MySQLdb.connect('localhost','catfuser','catfuser','testdb')
 	with con:
 		cur = con.cursor()
 		cur.execute("DELETE FROM PhotoObjects WHERE ObjID = \'%s\' AND Version < %s"%(objID,Version))
-		 
+
+def whichReplicaID(objHash):
+	#Under the assumption that six replicas have registered with the database, this function takes the objHash
+	#and perform calculations to determine what replicas to upload the objHash to.
+	global REPLICA_PER_FILE,RANDOM_NUMBER,MAX_REPLICA
+	value = 0
+	replicaList = list()
+
+	for i in range(0,RANDOM_NUMBER):
+		value = ord(objHash[i])
+
+	for i in range(0,REPLICA_PER_FILE):
+		a = (value%MAX_REPLICA)+i
+		if a > MAX_REPLICA:
+			a = a - MAX_REPLICA
+		replicaList.append(a)
+		
+	return replicaList
 
 def dbPOST(objID,Version,objHash):
-	updateTable(objID,Version)	
+	updateTable(objID,Version)
+	replicaList = whichReplicaID(objHash)
+	
 	try:
 		con = MySQLdb.connect('localhost','catfuser','catfuser','testdb')
 		with con:
@@ -71,7 +95,7 @@ def dbREQ(requestFile,clientSock,clientAddr):
 
 def contactMasterNode(reqMSG):
 	master = "localhost"
-	port = 12346
+	port = 12346 #Assume that master is using port 123456
 	buf = 1234
 
 	clientSock = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
@@ -86,10 +110,36 @@ def contactMasterNode(reqMSG):
 			else:
 				print recvdata
 		except socket.error,e:
-			print "Cannot contact the master node"
+			if "Connection refused" in e:
+				print "*** Connection Refused ***"
 			break
 
 	clientSock.close()
+
+def regREP(clientSock,clientAddr):
+	global REPLICA_COUNT
+	print "Receive replica connection request from %s : %s \n" % (clientAddr[0],clientAddr[1])
+	replicaIP = clientAddr[0]
+	replicaPORT = int(clientAddr[1])
+
+	if REPLICA_COUNT != 0:
+		replicaID = REPLICA_COUNT
+		REPLICA_COUNT = REPLICA_COUNT - 1
+
+		try:
+			con = MySQLdb.connect('localhost','catfuser','catfuser','testdb')
+			with con:
+				cur = con.cursor()
+				print "Registering Replica%s IP:%s PORT:%s" % (replicaID,replicaIP,replicaPORT)
+				cur.execute("INSERT INTO Replica VALUES(%s,\'%s\',%s)"%(replicaID,replicaIP,replicaPORT))
+			msg = "REPLICA_ID:%s" % replicaID
+			
+		except:
+			msg = "REGISTER_ERROR"
+	else:
+		print "REPLICA TABLE FULL: Cannot provide ID for connection request from %s : %s \n" % (clientAddr[0],clientAddr[1])
+		msg = "REPLICA_TABLE_FULL"
+	return msg
 
 def clientHandler(clientSock,clientAddr):
 	try:
@@ -108,7 +158,9 @@ def clientHandler(clientSock,clientAddr):
 		if len(msg) == 0:
 			msg = "EMPTY"
 	elif int(query[0]) == 4: # REQUEST_FILE
-		msg = dbREQ(query[1],clientSock,clientAddr) 	
+		msg = dbREQ(query[1],clientSock,clientAddr)
+	elif int(query[0]) == 5: # REGISTER REPLICA 
+		msg = regREP(clientSock,clientAddr) 	
 	else:
 		msg = "Invalid Query"
 
@@ -123,7 +175,10 @@ def resetDB():
 	with con:
 		cur = con.cursor()
 		cur.execute("DROP TABLE IF EXISTS PhotoObjects")
+		cur.execute("DROP TABLE IF EXISTS Replica")
 		cur.execute("CREATE TABLE PhotoObjects(ObjID VARCHAR(255),Version INT,PathHash CHAR(32))")
+		cur.execute("CREATE TABLE Replica(ReplicaID INT, ReplicaIP VARCHAR(255), ReplicaPORT INT )")
+
 		#cur.execute("INSERT INTO PhotoObjects Values(\'host\',1,\'%s\') " %(str(m.hexdigest())))
 		#cur.execute("INSERT INTO PhotoObjects Values(\'A\',1,\'A\')");
 		#cur.execute("INSERT INTO PhotoObjects Values(\'B\',1,\'B\')");
