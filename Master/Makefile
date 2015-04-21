@@ -44,10 +44,10 @@ testdb.o: testdb.c testdb.h
 	$(CC) -c -Wall testdb.c
 
 filetransfer.o: filetransfer.c filetransfer.h
-	$(CC) -c -Wall filetransfer.c -lcurl
+	$(CC) -c -Wall filetransfer.c -lcurl  $(CCFLAGS)
 
 thread_server.o: thread_server.c thread_server.h
-	$(CC) -c -Wall thread_server.c  -lpthread
+	$(CC) -c -Wall thread_server.c  -lpthread  $(CCFLAGS)
 
 clean:
 	rm *.o master replica

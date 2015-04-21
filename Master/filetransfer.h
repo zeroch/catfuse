@@ -16,6 +16,7 @@
 #ifdef MASTER
 
 #define REMOTE_URL      "ftp://zeroc.at/tmp" // UPLOAD_FILE_AS
+#define ROOT_DIR 		"/home/zechen/fuse"
 
 #elif YY
 
