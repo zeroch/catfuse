@@ -35,6 +35,7 @@ extern void MD5_Final(unsigned char *result, MD5_CTX *ctx);
 
 FILE* log_file;
 
+int replica_id = -1;
 static struct list_node entries;
 
 struct ou_entry {
@@ -67,6 +68,12 @@ void writeLogFile(char* data){
 }
 
 int getDBList(){
+  
+  if(replica_id==-1){
+    replica_id = regReplica();
+  }
+
+
   struct list_node *n;
   struct list_node *p;
   int res;
@@ -75,9 +82,8 @@ int getDBList(){
   char list_reply[2000];
   struct cache_index* my_cache_list[30] = { 0 };
   /* currently use a static array of size 30, if have time may have a linked list */
-  listContent(list_reply);
+  listContent(list_reply, replica_id);
 
-  
   //parse list                                                                
   if(strcmp(list_reply,"EMPTY")==0){
     //writeLogFile("Empty!");
@@ -150,12 +156,12 @@ int getDBList(){
       }
     }
     //file not found, build delete list
-    if(i==30){
+    if(i==30&&strcmp(o->name,".")!=0&&strcmp(o->name,"..")!=0){
       strcpy(delete_file[file_to_delete],o->name);
       file_to_delete++;
     }
   }
-
+  
   //delete file not exist in database
   for(i=0; i<file_to_delete; i++){
     list_for_each_safe (n, p, &entries) {
@@ -702,6 +708,8 @@ int main(int argc, char *argv[])
 
   list_init(&entries);
   UpdateList(ROOT_DIR);
+
+#ifdef MASTER
     // socket_init();
     kick_start();
 
@@ -771,7 +779,7 @@ int main(int argc, char *argv[])
         }
 	}
 
-
+#endif
   int res = fuse_main(argc, argv, &hello_oper, NULL);
   
 
