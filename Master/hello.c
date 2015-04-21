@@ -197,7 +197,7 @@ int getDBList(){
   sendList(acquire_list,server_reply,replica_id);
   int retry = 0;
   while(strcmp(server_reply,"REQUEST_OK")!=0 && retry<MAX_RETRY){
-    sendList(acquire_list, server_reply);
+    sendList(acquire_list, server_reply, replica_id);
   }
 
   return 0;
