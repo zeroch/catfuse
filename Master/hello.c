@@ -696,12 +696,12 @@ static struct fuse_operations hello_oper = {
 int main(int argc, char *argv[])
 {
     
-  #ifdef DEBUG
-  log_file = fopen("/mylog/log","a");
-  #endif
+    #ifdef DEBUG
+        log_file = fopen("/mylog/log","a");
+    #endif
 
-  list_init(&entries);
-  UpdateList(ROOT_DIR);
+    list_init(&entries);
+    UpdateList(ROOT_DIR);
     // socket_init();
     kick_start();
 

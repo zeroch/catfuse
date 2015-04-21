@@ -75,6 +75,8 @@ void message_parser(char *msg)
         for (i = 0; *(tokens + i); i++)
         {
             printf("file=[%s]\n", *(tokens + i));
+            // use FTP at here. 
+            transfer_put(*(tokens + i));
             free(*(tokens + i));
         }
         printf("\n");
@@ -192,29 +194,53 @@ int kick_start(void )
     struct sockaddr_in serverAddr;
     socklen_t addr_size;
 
+    printf("I am reading to kick start DataBase\n");
+
     /*---- Create the socket. The three arguments are: ----*/
     /* 1) Internet domain 2) Stream socket 3) Default protocol (TCP in this case) */
     clientSocket = socket(PF_INET, SOCK_STREAM, 0);
+    printf("DEBUG: I am dead here \n");
 
     /*---- Configure settings of the server address struct ----*/
     /* Address family = Internet */
     serverAddr.sin_family = AF_INET;
     /* Set port number, using htons function to use proper byte order */
     serverAddr.sin_port = htons(DB_PORT);
+    printf("DEBUG: I am dead here \n");
     /* Set IP address to localhost */
     serverAddr.sin_addr.s_addr = inet_addr(DB_IP);
+    printf("DEBUG: I am dead here \n");
     /* Set all bits of the padding field to 0 */
     memset(serverAddr.sin_zero, '\0', sizeof serverAddr.sin_zero);  
+    printf("DEBUG: I am dead here \n");
 
     /*---- Connect the socket to the server using the address struct ----*/
     addr_size = sizeof serverAddr;
-    connect(clientSocket, (struct sockaddr *) &serverAddr, addr_size);
+    if (connect(clientSocket, (struct sockaddr *) &serverAddr, addr_size)){
+        puts("connections Error\n");
+        return;
+    }
+
+
+
+    printf("DEBUG: I am dead here \n");
 
     /*---- Read the message from the server into the buffer ----*/
 
     strcpy(buffer, "6,   / I am walking up!");
-    send(clientSocket, buffer, 2000, 0);
-    recv(clientSocket, read_buf, 2000, 0);
+    printf("DEBUG: I am dead here 0\n");
+    if(send(clientSocket, buffer, 2000, 0)){
+        puts("Send failed");
+        return;
+    }
+    printf("DEBUG: I am dead here 1 \n");
+    if (recv(clientSocket, read_buf, 2000, 0))
+    {
+        puts("Receive Failed");
+        return;
+    }
+    
+    printf("DEBUG: I am dead here 2\n");
 
     /*---- Print the received message ----*/
     printf("Data received: %s",buffer);   

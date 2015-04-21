@@ -57,4 +57,4 @@ rclean:
 	rm *.o replica
 
 test:
-	@echo './hello ~/dev -d  -o nonempty'
+	@echo './master ~/dev -d  -o nonempty'
