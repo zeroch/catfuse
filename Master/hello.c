@@ -462,7 +462,7 @@ static int my_write(const char *path, const char *buf, size_t size,
     if (strcmp(path + 1, o->name) == 0) {
       o->tv.tv_sec = time(NULL);
       update_md5(o);
-      transfer_put(o->name);
+      transfer_put(REMOTE_URL, o->name);
       return res;
     }
   }

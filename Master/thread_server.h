@@ -7,7 +7,7 @@
 #include <netdb.h>
 #include <pthread.h>
 #include <assert.h>
-
+#include "filetransfer.h"
 
 #define PORT    "3000" /* Port to listen on */
 #define BACKLOG     10  /* Passed to listen() */
@@ -19,7 +19,7 @@ void *handle(void *pnewsock);
 int socket_init(void );
 int kick_start(void );
 char** str_split(char* a_str, const char a_delim);
-void message_parser(char *msg);
+void push_parser(char *msg);
 
 
 

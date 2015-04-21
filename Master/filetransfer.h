@@ -1,3 +1,7 @@
+#ifndef _FILETRANSFER_H_
+#define _FILETRANSFER_H_
+
+
 #include <stdio.h>
 #include <string.h>
 
@@ -45,8 +49,11 @@ struct FtpFile
 size_t read_callback(void *ptr, size_t size, size_t nmemb, void *stream);
 
 
-int transfer_put(const char * filename);
+int transfer_put(const char *remote, const char * filename);
 
 
 int transfer_get(const char *remote, const char * filename);
 int transfer_delete(const char * filename);
+
+
+#endif

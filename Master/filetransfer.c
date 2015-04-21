@@ -46,7 +46,7 @@ size_t write_callback(void *buffer, size_t size, size_t nmemb, void *stream)
 }
 
 
-int transfer_put(const char * filename)
+int transfer_put(const char * remote, const char * filename)
 {
     CURL *curl;
     CURLcode res;
@@ -91,7 +91,7 @@ int transfer_put(const char * filename)
         curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
 
         char target_url[256];
-        strcpy(target_url, REMOTE_URL);
+        strcpy(target_url, remote);
         strcat(target_url, "/");
         strncat(target_url, filename, 256);
 
@@ -160,9 +160,9 @@ int transfer_get(const char *remote, const char * filename)
     if (curl)
     {
         char src_url[256];
-        strcpy(src_url, REMOTE_URL);
-
+        strcpy(src_url, remote);
         strncat(src_url, filename, 256);
+
         curl_easy_setopt(curl, CURLOPT_URL, src_url);
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
 

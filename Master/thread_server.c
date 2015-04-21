@@ -60,7 +60,7 @@ char** str_split(char* a_str, const char a_delim)
 }
 
 
-void message_parser(char *msg)
+void push_parser(char *msg)
 {
    
     char** tokens;
@@ -68,15 +68,20 @@ void message_parser(char *msg)
     printf("msg=[%s]\n\n", msg);
 
     tokens = str_split(msg, ',');
-
+    char * url[100];
     if (tokens)
     {
         int i;
         for (i = 0; *(tokens + i); i++)
         {
+            if (i == 0)
+            {
+                printf("replica at %s\n", *(tokens + i));
+                strcpy(url, *(tokens + i));
+            }
             printf("file=[%s]\n", *(tokens + i));
             // use FTP at here. 
-            transfer_put(*(tokens + i));
+            transfer_put(url, *(tokens + i));
             free(*(tokens + i));
         }
         printf("\n");
@@ -98,7 +103,15 @@ void *handle(void *pnewsock)
         puts(client_message);
 
         // parse the message into src, filename, ...
-        message_parser(client_message);
+        char cmd[5];
+        strncpy(cmd, client_message, 5);
+        strcpy(client_message, client_message+5);
+        if (!strcmp(cmd, "push,"))
+        {
+            push_parser(client_message);
+        }else {
+            puts("It is a pull");
+        }
 
         strcpy(sendBuf, client_message);
         printf("sending message: echo %s", sendBuf);
