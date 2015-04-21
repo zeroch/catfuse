@@ -39,7 +39,7 @@
 
 #ifdef CY
 #define REMOTE_URL      "ftp://zeroc.at/cat2" // UPLOAD_FILE_AS
-#define ROOT_DIR 		"/home/catgt/cat1"
+#define ROOT_DIR 		"/home/catgt/cat2"
 #endif
 
 

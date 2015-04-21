@@ -73,7 +73,17 @@ def dbGET(objID):
 
 def dbGET(objIDList):
 	msg = "pull,"
-	objList = objIDList.split(":")
+	print "In the dbGET" + objIDList
+	print type(objIDList)
+	if "EMPTY" in objIDList:
+		print "debug"
+		return msg + "error"
+
+	if not objIDList:
+		return msg + "error"
+
+	objList = objIDList.split(":")[:-1]
+	print objList
 	try:
 		con = MySQLdb.connect('localhost','catfuser','catfuser','testdb')
 		with con:
@@ -81,10 +91,13 @@ def dbGET(objIDList):
 			for  objID in objList:
 				cur.execute("SELECT PathHash FROM PhotoObjects WHERE ObjID = \"%s\" ORDER BY Version DESC LIMIT 1"%objID)
 				objHashrow = cur.fetchall()
+				print "fetch step 1"
 
 				cur.execute("SELECT ReplicaID FROM DistFile WHERE PathHash = \"%s\""% objHashrow[0][0])
 				replicaIDrow = cur.fetchall()
+				print "fetch step 2"
 				msg = msg + "%s:cat%s," % (objID,replicaIDrow[0][0])
+				print msg
 
 
 	except:
@@ -226,17 +239,20 @@ def masterLIST():
 		return
 	
 	msg = "whole"+msg
+	print msg
 
 	recvdata = None
 	try:
 		masterSock.send(msg)
 		recvdata = masterSock.recv(buf)
+		print "response of whole list",recvdata
 	except socket.error,e:
 		if "Connection refused" in e:
 			print "--- Connection Refused ---"
 	
-	print recvdata
+	print recvdata + "123"
 	msg = dbGET(recvdata)
+	print "send data:",msg
 
 	try:
 		masterSock.send(msg)

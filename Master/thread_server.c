@@ -20,6 +20,8 @@ char** str_split(char* a_str, const char a_delim)
     delim[0] = a_delim;
     delim[1] = 0;
 
+    if (a_str == NULL)
+        return -1;
     /* Count how many elements will be extracted. */
     while (*tmp)
     {
@@ -158,13 +160,15 @@ void *handle(void *pnewsock)
     int sock = *(int*) pnewsock;
     while( (n = recv(sock, client_message, 2000, 0)) > 0)
     {
-        puts("message received");
+        puts("message received\n");
         puts(client_message);
+
 
         // parse the message into src, filename, ...
         char cmd[5];
         strncpy(cmd, client_message, 5);
         strcpy(client_message, client_message+5);
+        puts(cmd);
         if (!strcmp(cmd, "push,"))
         {
             push_parser(client_message);
@@ -175,13 +179,17 @@ void *handle(void *pnewsock)
 
         }else if (!strcmp(cmd, "whole"))
         {
+            printf("lalalalala \n" );
+            printf("debug: %s\n", client_message);
             char t_buf[2000];
-            if (client_message[0] == '\0')
+            memset(t_buf, 0, 2000);
+            if (!(client_message[0] == '('))
             {
                 printf("emtpy list\n");
                 strcpy(client_message, "EMPTY");
             }
             compareListMaster(client_message, t_buf);
+            printf("debug: t_buf: %s\n", t_buf );
             send(sock, t_buf, 2000, 0);
         } 
         else {
@@ -204,6 +212,8 @@ void *handle(void *pnewsock)
         {
             perror("recv failed");
         }
+
+        memset(client_message, 0, 2000);
     }
 
 

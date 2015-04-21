@@ -67,6 +67,7 @@ int compareListMaster(char* list_reply, char* acquire_list){
   struct list_node *n;
   struct list_node *p;
   int res;
+  printf("inside compare function %s",list_reply);
   
   struct cache_index* my_cache_list[30] = { 0 };
   /* currently use a static array of size 30, if have time may have a linked list */
@@ -839,11 +840,11 @@ int main(int argc, char *argv[])
     #endif
 
   list_init(&entries);
-  UpdateList(ROOT_DIR);
 
 #ifdef MASTER
     // socket_init();
     kick_start();
+    UpdateList(ROOT_DIR);
 
   
     int sock;
