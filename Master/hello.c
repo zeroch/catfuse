@@ -74,6 +74,125 @@ void writeLogFile(char* data){
   #endif
 }
 
+int compareListMaster(char* list_reply, char* acquire_list){
+  struct list_node *n;
+  struct list_node *p;
+  int res;
+  
+  struct cache_index* my_cache_list[30] = { 0 };
+  /* currently use a static array of size 30, if have time may have a linked list */
+  
+  //parse list                                                                
+  if(strcmp(list_reply,"EMPTY")==0){
+    strcpy(acquire_list,"EMPTY");
+    return -1;
+  }
+
+  char delete_file[30][MAX_NAMELEN];
+  int file_to_delete = 0;
+  int i;
+  int obj_num=0;
+  int obj_field=0;
+  int infield_index=0;
+  for(i=0;i<2000;i++){
+    char tmp_char = list_reply[i];
+    if(tmp_char==')'){
+      obj_num++;
+      obj_field = 0;
+      infield_index=0;
+      if(list_reply[i+1]!='('){
+	break;
+      }
+    }else if(tmp_char=='('){
+      //initialize object                                                                   
+      my_cache_list[obj_num] = malloc(sizeof(struct cache_index));
+      memset(my_cache_list[obj_num]->name,0,MAX_NAMELEN+1);
+      memset(my_cache_list[obj_num]->version,0,20);
+      memset(my_cache_list[obj_num]->md5_hash,0,32);
+    }else if(tmp_char==','){
+      obj_field++;
+      infield_index=0;
+    }else{
+      switch(obj_field){
+      case 0:
+	my_cache_list[obj_num]->name[infield_index] = tmp_char;
+	break;
+      case 1:
+	my_cache_list[obj_num]->version[infield_index] = tmp_char;
+	break;
+      case 2:
+	my_cache_list[obj_num]->md5_hash[infield_index] = tmp_char;
+	break;
+      }
+      infield_index++;
+    }
+
+  }
+
+  //search newer version
+  list_for_each (n, &entries) {
+    struct ou_entry* o = list_entry(n, struct ou_entry, node);
+    for(i=0; i<30; i++){
+      if(my_cache_list[i]!=NULL && strcmp(my_cache_list[i]->name,o->name)==0){
+	int db_timestamp = atoi(my_cache_list[i]->version);
+	if(db_timestamp<=o->tv.tv_sec){
+	  //ignore it
+	}else{
+	  //db has newer version,compare hash to decide whether to acquire it
+	  if(strcmp(o->md5_hash,my_cache_list[i]->md5_hash)!=0){
+	    strcat(acquire_list,o->name);
+	    strcat(acquire_list,":");
+	  }
+	}
+	free(my_cache_list[i]);
+	my_cache_list[i] = NULL;
+	break;
+      }
+    }
+    //file not found, build delete list
+    if(i==30&&strcmp(o->name,".")!=0&&strcmp(o->name,"..")!=0){
+      strcpy(delete_file[file_to_delete],o->name);
+      file_to_delete++;
+    }
+  }
+
+  /*  
+  //delete file not exist in database
+  for(i=0; i<file_to_delete; i++){
+    list_for_each_safe (n, p, &entries) {
+      struct ou_entry* o = list_entry(n, struct ou_entry, node);
+      if (strcmp(delete_file[i], o->name) == 0) {
+	__list_del(n);
+	char fullpath[MAX_NAMELEN];
+	full_path_from_name(fullpath, o->name);
+	res = unlink(fullpath);
+	if(res==-1)
+	  return -errno;
+	free(o);
+	break;
+      }
+    }
+    }*/
+
+  //search new file
+  for(i=0; i<30; i++){
+    if(my_cache_list[i]!=NULL){
+      strcat(acquire_list, my_cache_list[i]->name);
+      strcat(acquire_list,":");
+      free(my_cache_list[i]);
+      my_cache_list[i] = NULL;
+    }
+  }
+
+  if(strcmp(acquire_list,"")==0){
+    strcpy(acquire_list,"EMPTY");
+  }
+  
+  return 0;
+}
+
+
+
 int getDBList(){
   
   if(replica_id==-1){
@@ -658,6 +777,17 @@ static int my_unlink(const char* path)
 }
 
 int UpdateList(char* path){
+
+#ifdef REPLICA
+  struct list_node *n,*p;
+  list_for_each_safe (n, p, &entries) {
+    struct ou_entry* o = list_entry(n, struct ou_entry, node);
+    free(o);
+  }
+  list_init(&entries);
+
+#endif
+
   DIR* dp;
   struct dirent* de;
 
