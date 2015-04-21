@@ -29,22 +29,30 @@ def whichReplicaID(objHash):
 		a = (value%MAX_REPLICA)+i
 		if a > MAX_REPLICA:
 			a = a - MAX_REPLICA
+		if a == 0: a = a + MAX_REPLICA
 		replicaList.append(a)
-		
+
 	return replicaList
 
 def dbPOST(objID,Version,objHash):
 	updateTable(objID,Version)
 	replicaList = whichReplicaID(objHash)
+	msg = ""
+	for replicaID in replicaList:
+		msg = msg + "%s,"%replicaID
+	msg = msg[:-1]
 	
 	try:
 		con = MySQLdb.connect('localhost','catfuser','catfuser','testdb')
 		with con:
 			cur = con.cursor()
 			cur.execute("INSERT INTO PhotoObjects VALUES(\'%s\',%s,\'%s\')"%(objID,Version,objHash))
+			for replicaID in replicaList:
+				cur.execute("INSERT INTO DistFile VALUES(\'%s\',%s)" %(objHash,replicaID))
 	except:
 		return "POST_ERROR"
-	return "POST_OK"
+
+	return msg
 
 def dbGET(objID):
 	try:
@@ -54,7 +62,7 @@ def dbGET(objID):
 			cur.execute("SELECT PathHash FROM PhotoObjects WHERE ObjID = \"%s\" ORDER BY Version DESC LIMIT 1"%objID)
 			results = cur.fetchall()
 	except:
-		return "GET_ERROR"		
+		return "GET_ERROR"
 	return results[0][0]
 
 def dbDELETE(objID):
@@ -176,8 +184,10 @@ def resetDB():
 		cur = con.cursor()
 		cur.execute("DROP TABLE IF EXISTS PhotoObjects")
 		cur.execute("DROP TABLE IF EXISTS Replica")
+		cur.execute("DROP TABLE IF EXISTS DistFile")
 		cur.execute("CREATE TABLE PhotoObjects(ObjID VARCHAR(255),Version INT,PathHash CHAR(32))")
 		cur.execute("CREATE TABLE Replica(ReplicaID INT, ReplicaIP VARCHAR(255), ReplicaPORT INT )")
+		cur.execute("CREATE TABLE DistFile(PathHash CHAR(32),ReplicaID INT)")
 
 		#cur.execute("INSERT INTO PhotoObjects Values(\'host\',1,\'%s\') " %(str(m.hexdigest())))
 		#cur.execute("INSERT INTO PhotoObjects Values(\'A\',1,\'A\')");
