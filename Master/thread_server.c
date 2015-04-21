@@ -6,6 +6,85 @@
 
 #include "thread_server.h"
 
+/*  assume input a buff with size 2000
+    use ',' as spliter. 
+
+*/
+char** str_split(char* a_str, const char a_delim)
+{
+    char** result    = 0;
+    size_t count     = 0;
+    char* tmp        = a_str;
+    char* last_comma = 0;
+    char delim[2];
+    delim[0] = a_delim;
+    delim[1] = 0;
+
+    /* Count how many elements will be extracted. */
+    while (*tmp)
+    {
+        if (a_delim == *tmp)
+        {
+            count++;
+            last_comma = tmp;
+        }
+        tmp++;
+    }
+
+    /* Add space for trailing token. */
+    count += last_comma < (a_str + strlen(a_str) - 1);
+
+    /* Add space for terminating null string so caller
+       knows where the list of returned strings ends. */
+    count++;
+
+    result = malloc(sizeof(char*) * count);
+
+    if (result)
+    {
+        size_t idx  = 0;
+        char* token = strtok(a_str, delim);
+
+        while (token)
+        {
+            assert(idx < count);
+            *(result + idx++) = strdup(token);
+            token = strtok(0, delim);
+        }
+        assert(idx == count - 1);
+        *(result + idx) = 0;
+    }
+
+    return result;
+
+}
+
+
+void message_parser(char *msg)
+{
+   
+    char** tokens;
+
+    printf("msg=[%s]\n\n", msg);
+
+    tokens = str_split(msg, ',');
+
+    if (tokens)
+    {
+        int i;
+        for (i = 0; *(tokens + i); i++)
+        {
+            printf("file=[%s]\n", *(tokens + i));
+            // use FTP at here. 
+            transfer_put(*(tokens + i));
+            free(*(tokens + i));
+        }
+        printf("\n");
+        free(tokens);
+    }
+
+}
+
 
 void *handle(void *pnewsock)
 {
@@ -17,6 +96,10 @@ void *handle(void *pnewsock)
     {
         puts("message received");
         puts(client_message);
+
+        // parse the message into src, filename, ...
+        message_parser(client_message);
+
         strcpy(sendBuf, client_message);
         printf("sending message: echo %s", sendBuf);
         send(sock, client_message, n, 0);
@@ -111,33 +194,58 @@ int kick_start(void )
     struct sockaddr_in serverAddr;
     socklen_t addr_size;
 
+    printf("I am reading to kick start DataBase\n");
+
     /*---- Create the socket. The three arguments are: ----*/
     /* 1) Internet domain 2) Stream socket 3) Default protocol (TCP in this case) */
     clientSocket = socket(PF_INET, SOCK_STREAM, 0);
+    printf("DEBUG: I am dead here \n");
 
     /*---- Configure settings of the server address struct ----*/
     /* Address family = Internet */
     serverAddr.sin_family = AF_INET;
     /* Set port number, using htons function to use proper byte order */
     serverAddr.sin_port = htons(DB_PORT);
+    printf("DEBUG: I am dead here \n");
     /* Set IP address to localhost */
     serverAddr.sin_addr.s_addr = inet_addr(DB_IP);
+    printf("DEBUG: I am dead here \n");
     /* Set all bits of the padding field to 0 */
     memset(serverAddr.sin_zero, '\0', sizeof serverAddr.sin_zero);  
+    printf("DEBUG: I am dead here \n");
 
     /*---- Connect the socket to the server using the address struct ----*/
     addr_size = sizeof serverAddr;
-    connect(clientSocket, (struct sockaddr *) &serverAddr, addr_size);
+    if (connect(clientSocket, (struct sockaddr *) &serverAddr, addr_size)){
+        puts("connections Error\n");
+        return;
+    }
+
+
+
+    printf("DEBUG: I am dead here \n");
 
     /*---- Read the message from the server into the buffer ----*/
 
     strcpy(buffer, "6,   / I am walking up!");
-    send(clientSocket, buffer, 2000, 0);
-    recv(clientSocket, read_buf, 2000, 0);
+    printf("DEBUG: I am dead here 0\n");
+    if(send(clientSocket, buffer, 2000, 0)){
+        puts("Send failed");
+        return;
+    }
+    printf("DEBUG: I am dead here 1 \n");
+    if (recv(clientSocket, read_buf, 2000, 0))
+    {
+        puts("Receive Failed");
+        return;
+    }
+    
+    printf("DEBUG: I am dead here 2\n");
 
     /*---- Print the received message ----*/
     printf("Data received: %s",buffer);   
 
     printf("------------ Kick starting DataBase -------\n");
 
+    return 0;
 }

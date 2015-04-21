@@ -194,7 +194,7 @@ int getDBList(){
   }
   
   char server_reply[2000];
-  sendList(acquire_list,server_reply);
+  sendList(acquire_list,server_reply,replica_id);
   int retry = 0;
   while(strcmp(server_reply,"REQUEST_OK")!=0 && retry<MAX_RETRY){
     sendList(acquire_list, server_reply);
@@ -702,9 +702,9 @@ static struct fuse_operations hello_oper = {
 int main(int argc, char *argv[])
 {
     
-  #ifdef DEBUG
-  log_file = fopen("/mylog/log","a");
-  #endif
+    #ifdef DEBUG
+        log_file = fopen("/mylog/log","a");
+    #endif
 
   list_init(&entries);
   UpdateList(ROOT_DIR);
