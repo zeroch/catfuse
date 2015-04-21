@@ -58,6 +58,13 @@ static void fullPath(char fpath[MAX_NAMELEN], const char * path)
   strncat(fpath, path, MAX_NAMELEN);
 }
 
+static void full_path_from_name(char fpath[MAX_NAMELEN], const char * path)
+{
+  strcpy(fpath, ROOT_DIR);
+  strcat(fpath, "/");
+  strncat(fpath, path, MAX_NAMELEN);
+}
+
 
 void writeLogFile(char* data){
   #ifdef DEBUG
@@ -169,7 +176,7 @@ int getDBList(){
       if (strcmp(delete_file[i], o->name) == 0) {
 	__list_del(n);
 	char fullpath[MAX_NAMELEN];
-	fullPath(fullpath, o->name);
+	full_path_from_name(fullpath, o->name);
 	res = unlink(fullpath);
 	if(res==-1)
 	  return -errno;
@@ -215,11 +222,7 @@ void update_md5(struct ou_entry* entry){
   
   
   char full_path[MAX_NAMELEN];
-  char t_name[MAX_NAMELEN];
-  strcpy(t_name, "/");
-  strcat(t_name, entry->name);
-  fullPath(full_path, t_name);
-  // sprintf(full_path,"/tmp/%s",entry->name);
+  full_path_from_name(full_path, entry->name);
   printf("debug: %s\n", full_path);
   FILE* pFile = fopen(full_path, "r");
   printf("This is at MASTERx\n");
@@ -671,7 +674,7 @@ int UpdateList(char* path){
 
     printf("%s",o->name);
     char full_path[MAX_NAMELEN];
-    fullPath(full_path, o->name);
+    full_path_from_name(full_path, o->name);
     // sprintf(full_path,"/tmp/%s",o->name);
     struct stat* stbuf = malloc(sizeof(struct stat));
     memset(stbuf, 0, sizeof(struct stat));
