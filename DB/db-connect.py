@@ -37,10 +37,10 @@ def whichReplicaID(objHash):
 def dbPOST(objID,Version,objHash):
 	updateTable(objID,Version)
 	replicaList = whichReplicaID(objHash)
-	msg = ""
-	for replicaID in replicaList:
-		msg = msg + "%s,"%replicaID
-	msg = msg[:-1]
+	#msg = ""
+	#for replicaID in replicaList:
+	#	msg = msg + "%s,"%replicaID
+	#msg = msg[:-1]
 	
 	try:
 		con = MySQLdb.connect('localhost','catfuser','catfuser','testdb')
@@ -52,7 +52,7 @@ def dbPOST(objID,Version,objHash):
 	except:
 		return "POST_ERROR"
 
-	return msg
+	return "POST_OK"
 
 def dbGET(objID):
 	try:
@@ -75,16 +75,30 @@ def dbDELETE(objID):
 		return "DELETE_ERROR"
 	return "DELETE_OK"
 
-def dbLIST():
+def dbLIST(clientSock,clientAddr):
+	replicaIP = clientAddr[0]
+	replicaPORT = int(clientAddr[1])
 	msg = ""
 	try:
 		con = MySQLdb.connect('localhost','catfuser','catfuser','testdb')
 		with con:
 			cur = con.cursor()
-			cur.execute("SELECT * FROM PhotoObjects")
+			cur.execute("SELECT ReplicaID FROM Replica WHERE ReplicaIP = \'%s\' AND ReplicaPORT = %s" % (replicaIP,replicaPORT))
+
+			#print "replicaID from %s : %s is %s" %(replicaIP,replicaPORT,cur.fetchall()[0][0])
+			replicaID = cur.fetchall()[0][0]
+
+			#print "replicaID is %s" % replicaID
+			cur.execute("SELECT PathHash FROM DistFile WHERE ReplicaID = %s" % replicaID)
 			rows = cur.fetchall()
 			for row in rows:
-				msg = msg + "(%s,%s,%s)" % (row[0],row[1],row[2])
+				cur.execute("SELECT * FROM PhotoObjects WHERE PathHash = \'%s\'" %row[0])
+				subrow = cur.fetchall()
+				#print "subrow = %s" % subrow
+				#print subrow[0][0]
+				#print subrow[0][1]
+				#print subrow[0][2]
+				msg = msg + "(%s,%s,%s)" % (subrow[0][0],subrow[0][1],subrow[0][2])
 	except:
 		return "LIST_ERROR"
 	return msg			
@@ -162,7 +176,7 @@ def clientHandler(clientSock,clientAddr):
 	elif int(query[0]) == 2: # DELETE
 		msg = dbDELETE(query[1])
 	elif int(query[0]) == 3: # LIST
-		msg = dbLIST()
+		msg = dbLIST(clientSock,clientAddr)
 		if len(msg) == 0:
 			msg = "EMPTY"
 	elif int(query[0]) == 4: # REQUEST_FILE
@@ -202,7 +216,7 @@ def resetDB():
 	#print msg
 
 def main():
-	resetDB()
+	#resetDB()
 	host = 'localhost'
 	port = 12345
 	buf = 1024
