@@ -1,5 +1,8 @@
 UNAME_S	:=	$(shell uname -s)
 
+
+
+
 ifeq ($(UNAME_S),Darwin)
 	CCFLAGS	+=	-D	OSX
 	CCFLAGS += -D_FILE_OFFSET_BITS = 64 -I/usr/local/include/osxfuse -L/usr/local/lib -lfuse -pthread
@@ -23,6 +26,8 @@ endif
 
 CC := gcc
 
+all:
+	echo $(OPTION)
 master: hello.o md5.o testdb.o filetransfer.o thread_server.o
 	$(CC) -o master hello.o md5.o testdb.o filetransfer.o thread_server.o $(CCFLAGS)  -lcurl
 

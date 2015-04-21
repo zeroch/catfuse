@@ -213,7 +213,8 @@ void update_md5(struct ou_entry* entry){
   
   
   char full_path[MAX_NAMELEN];
-  sprintf(full_path,"/tmp/%s",entry->name);
+  fullPath(full_path, entry->name);
+  // sprintf(full_path,"/tmp/%s",entry->name);
   FILE* pFile = fopen(full_path, "r");
   if(pFile==NULL){
     return;
@@ -657,7 +658,8 @@ int UpdateList(char* path){
 
     printf("%s",o->name);
     char full_path[MAX_NAMELEN];
-    sprintf(full_path,"/tmp/%s",o->name);
+    fullPath(full_path, o->name);
+    // sprintf(full_path,"/tmp/%s",o->name);
     struct stat* stbuf = malloc(sizeof(struct stat));
     memset(stbuf, 0, sizeof(struct stat));
     lstat(full_path, stbuf);
