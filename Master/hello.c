@@ -25,8 +25,6 @@
 
 #define MAX_RETRY 3
 #define MAX_NAMELEN 255
-#define DEBUG
-#define REPLICA
 
 
 extern void MD5_Init(MD5_CTX *ctx);
@@ -204,13 +202,26 @@ int getDBList(){
 }
 
 void update_md5(struct ou_entry* entry){
-  char md5_data[MAX_NAMELEN];
+  char md5_data[1024];
   char md5_hex[33];
   unsigned char md5_digest[16];
-  sprintf(md5_data, "%s%d", entry->name, (int)entry->tv.tv_sec);
+  //sprintf(md5_data, "%s%d", entry->name, (int)entry->tv.tv_sec);
   MD5_CTX context;
   MD5_Init(&context);
-  MD5_Update(&context, md5_data, strlen(md5_data));
+  
+  
+  char full_path[MAX_NAMELEN];
+  sprintf(full_path,"/tmp/%s",entry->name);
+  FILE* pFile = fopen(full_path, "r");
+  if(pFile==NULL){
+    return;
+  }
+  int bytes;
+  while((bytes = fread(md5_data,1,1024,pFile))!=0){
+    MD5_Update(&context, md5_data, bytes);
+  }
+  fclose(pFile);
+  //MD5_Update(&context, md5_data, strlen(md5_data));
   MD5_Final(md5_digest, &context);
   
   char server_reply[100];
@@ -219,6 +230,7 @@ void update_md5(struct ou_entry* entry){
     sprintf(md5_hex+2*h,"%02x",md5_digest[h]);
   }
 
+#ifdef MASTER
   postContent(entry->name,(int)entry->tv.tv_sec,md5_hex,server_reply);
   //error checking
   int retry=0;
@@ -226,6 +238,8 @@ void update_md5(struct ou_entry* entry){
     postContent(entry->name,(int)entry->tv.tv_sec,md5_hex,server_reply);
     retry++;
   }
+#endif
+
   strcpy(entry->md5_hash,md5_hex);
 
   #ifdef DEBUG
@@ -262,23 +276,17 @@ static int my_getattr(const char *path, struct stat *st)
   char whole_path[MAX_NAMELEN];
   sprintf(whole_path,"/tmp%s",path);
   int res;
-  /*
-  list_for_each (n, &entries) {
-    struct ou_entry* o = list_entry(n, struct ou_entry, node);
-    if (strcmp(path + 1, o->name) == 0) {
-      res = lstat(whole_path, st);
-      if(res==-1)
-	return -errno;
-      st->st_mode = o->mode;
-      st->st_nlink = 1;
-      return 0;
-    }
-  }
-  */
 
   res = lstat(whole_path,st);
   if(res==-1)
     return -errno;
+  /*list_for_each (n, &entries) {                                               
+    struct ou_entry* o = list_entry(n, struct ou_entry, node);                 
+    if (strcmp(path + 1, o->name) == 0) {                                      
+      st->st_mode = o->mode;                                                   
+      return 0;                                                                
+    }                                                                          
+    } */
 
   return 0;
 }
@@ -289,15 +297,17 @@ static int my_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
   (void) offset;
   (void) fi;
 
+#ifdef REPLICA
   getDBList();
+#endif
 
   struct list_node* n;
 
   if (strcmp(path, "/") != 0)
     return -ENOENT;
 
-  filler(buf, ".", NULL, 0);
-  filler(buf, "..", NULL, 0);
+  //filler(buf, ".", NULL, 0);
+  //filler(buf, "..", NULL, 0);
 
   list_for_each (n, &entries) {
   struct ou_entry* o = list_entry(n, struct ou_entry, node);
@@ -362,6 +372,7 @@ static int my_utimens(const char *path, const struct timespec ts[2])
 
   return -ENOENT;
 }
+
 
 static int my_chmod(const char * path, mode_t new_mode)
 {
@@ -551,13 +562,27 @@ static int my_create(const char* path, mode_t mode, struct fuse_file_info* fi)
 
   o = malloc(sizeof(struct ou_entry));
   strcpy(o->name, path + 1); /* skip leading '/' */
-  //o->mode = 0660 | S_IFREG;
+  #ifdef MASTER
+  o->mode = 0660 | S_IFREG;
+  #endif
+  #ifdef REPLICA
+  o->mode = 0660 | S_IFREG;
+  #endif
+
   list_add_prev(&o->node, &entries);
 
   char whole_path[MAX_NAMELEN];
   sprintf(whole_path,"/tmp%s",path);
 
-  int res = creat(whole_path, S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP);
+  
+  int res = 0;
+  #ifdef MASTER
+  res = creat(whole_path, S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP);
+  #endif
+  #ifdef REPLICA
+  res = creat(whole_path, S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP);
+  #endif
+
   if(res==-1){
     return -errno;
   }
@@ -584,7 +609,7 @@ static int my_unlink(const char* path)
       if(res==-1)
 	return -errno;
 
-      
+      #ifdef MASTER
       //tell db to delete record
       char server_reply[100];
       delContent(o->name,server_reply);
@@ -594,7 +619,7 @@ static int my_unlink(const char* path)
 	delContent(o->name,server_reply);
 	retry++;
       }
-      
+      #endif
 
       free(o);
       return res;
@@ -662,6 +687,7 @@ static struct fuse_operations hello_oper = {
 
 int main(int argc, char *argv[])
 {
+    
   #ifdef DEBUG
   log_file = fopen("/mylog/log","a");
   #endif

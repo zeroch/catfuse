@@ -11,9 +11,22 @@ sys:
 	@echo 'THIS IS LINUX'
 endif
 
+CCFLAGS +=	-DDEBUG
+ 
+ifeq ($(MAKECMDGOALS),master)
+	CCFLAGS +=	-DMASTER
+else ifeq ($(MAKECMDGOALS),replica)
+	CCFLAGS +=	-DREPLICA
+endif
+
+
+
 CC := gcc
-hello: hello.o md5.o testdb.o
-	$(CC) -o hello hello.o md5.o testdb.o $(CCFLAGS)
+master: hello.o md5.o testdb.o
+	$(CC) -o master hello.o md5.o testdb.o $(CCFLAGS)
+
+replica: hello.o md5.o testdb.o
+	$(CC) -o replica hello.o md5.o testdb.o $(CCFLAGS)
 
 hello.o: hello.c list.h md5.h testdb.h
 	$(CC) -c -Wall hello.c  $(CCFLAGS)
@@ -25,7 +38,7 @@ testdb.o: testdb.c testdb.h
 	$(CC) -c -Wall testdb.c
 
 clean:
-	rm *.o hello
+	rm *.o master replica
 
 test:
 	@echo './hello ~/dev/tmp/cat -o defer_permissions'
