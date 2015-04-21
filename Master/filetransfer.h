@@ -13,7 +13,7 @@
 #define PASSWD          "hackgt"
 
 
-#ifdef MASTER
+#ifdef M
 
 #define REMOTE_URL      "ftp://zeroc.at/tmp" // UPLOAD_FILE_AS
 #define ROOT_DIR 		"/home/zechen/fuse"
@@ -23,12 +23,12 @@
 #define REMOTE_URL      "ftp://localhost/remote_tmp" // UPLOAD_FILE_AS
 #define ROOT_DIR 		"/tmp"
 
-#elif REPLICA1
+#elif CX
 
 #define REMOTE_URL      "ftp://zeroc.at/cat1" // UPLOAD_FILE_AS
 #define ROOT_DIR 		"/home/catgt/cat1"
 
-#elif REPLICA2
+#elif CY
 
 #define REMOTE_URL      "ftp://zeroc.at/cat2" // UPLOAD_FILE_AS
 #define ROOT_DIR 		"/home/catgt/cat1"

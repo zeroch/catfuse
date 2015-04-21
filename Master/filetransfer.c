@@ -130,10 +130,11 @@ int transfer_put(const char * filename)
         printf("before curl_easy_cleanup\n" );
 
         curl_easy_cleanup(curl);
+        return 0;
     }
 
     fclose(hd_src); /* close the local file */
-    return 0;
+    return -1;
 
 }
 
@@ -187,6 +188,8 @@ int transfer_get(const char *remote, const char * filename)
         return 0;
     }
 
+    return -1;
+
 }
 
 
@@ -201,7 +204,7 @@ int transfer_delete(const char * filename)
 
     struct curl_slist *headerlist=NULL;
     char buf_1 [256];
-    char buf_2[256];
+    // char buf_2[256];
 
     strcpy(buf_1, DEL_CMD);
     strncat(buf_1, filename, 256);
@@ -253,5 +256,5 @@ int transfer_delete(const char * filename)
         return 0;
     }
 
-
+    return -1;
 }
