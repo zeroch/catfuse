@@ -3,11 +3,15 @@ import MySQLdb
 import socket
 import thread
 import hashlib
+import time
 
 MAX_REPLICA = 6 #The maximum number of Replica Nodes here
 REPLICA_COUNT = MAX_REPLICA #Keep track of how many replica can still register until table is full
 REPLICA_PER_FILE = MAX_REPLICA / 2 #Number of Replica to upload a file to
 RANDOM_NUMBER = 4 #Used to randomly determine ReplicaID to upload a file to in whichReplicaID Function
+
+#static socket to connect with master
+masterSock = None
 
 def updateTable(objID,Version):
 	con = MySQLdb.connect('localhost','catfuser','catfuser','testdb')
@@ -144,27 +148,21 @@ def dbREQ(requestFile,clientSock,clientAddr):
 	return "REQUEST_OK"
 
 def contactMasterNode(reqMSG):
-	master = "localhost"
-	port = 12346 #Assume that master is using port 123456
-	buf = 1234
-
-	clientSock = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-	clientSock.connect((master,port))
-
+	global masterSock
 	while True:
 		try:
-			clientSock.send(reqMSG)
-			recvdata = clientSock.recv(buf)
+			masterSock.send(reqMSG)
+			recvdata = masterSock.recv(buf)
 			if not recvdata:
 				break
 			else:
 				print recvdata
+				break
 		except socket.error,e:
 			if "Connection refused" in e:
 				print "*** Connection Refused ***"
 			break
 
-	clientSock.close()
 
 
 def regREP(clientSock,clientAddr):
@@ -261,6 +259,27 @@ def clientHandler(clientSock,clientAddr):
 
 	clientSock.send(msg)
 	clientSock.close()
+	
+	if query[0] == 6:
+		time.sleep(1)
+		master = "localhost"
+		port = 3000
+		buf = 1234
+		global masterSock
+		masterSock = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+		masterSock.connect((master,port))
+		while True:
+			try:
+				masterSock.send("Test Connection...")
+				recvdata = masterSock.recv(buf)
+				if recvdata:
+					print recvdata
+					break
+			except socket.error,e:
+				if "Connection refused" in e:
+					print "--- Connection Refused ---"
+					break
+
 
 def resetDB():
 	#m = hashlib.md5()
