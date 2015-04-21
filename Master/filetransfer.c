@@ -94,7 +94,7 @@ int transfer_put(const char * remote, const char * filename)
         strcpy(target_url, remote);
         strcat(target_url, "/");
         strncat(target_url, filename, 256);
-
+        printf("debug: target_url: %s\n", target_url);
         /* specify target */
         curl_easy_setopt(curl,CURLOPT_URL, target_url);
 

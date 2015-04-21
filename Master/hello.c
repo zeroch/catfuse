@@ -32,6 +32,7 @@
 extern void MD5_Init(MD5_CTX *ctx);
 extern void MD5_Update(MD5_CTX *ctx, const void *data, unsigned long size);
 extern void MD5_Final(unsigned char *result, MD5_CTX *ctx);
+int UpdateList(char* path);
 
 FILE* log_file;
 
@@ -273,7 +274,7 @@ int getDBList(){
 	  //db has newer version,compare hash to decide whether to acquire it
 	  if(strcmp(o->md5_hash,my_cache_list[i]->md5_hash)!=0){
 	    strcat(acquire_list,o->name);
-	    strcat(acquire_list,",");
+	    strcat(acquire_list,":");
 	  }
 	}
 	free(my_cache_list[i]);
@@ -435,6 +436,7 @@ static int my_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
   (void) fi;
 
 #ifdef REPLICA
+  UpdateList(ROOT_DIR);
   getDBList();
 #endif
 

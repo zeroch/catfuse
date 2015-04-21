@@ -14,7 +14,8 @@ sys:
 	@echo 'THIS IS LINUX'
 endif
 
-CCFLAGS +=	-DRELEASE
+
+CCFLAGS +=	-DTEST
  
 ifeq ($(MAKECMDGOALS),master)
 	CCFLAGS +=	-DMASTER
