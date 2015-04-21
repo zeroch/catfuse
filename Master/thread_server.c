@@ -171,6 +171,7 @@ void *handle(void *pnewsock)
         }else if (!strcmp(cmd, "pull,"))
         {
             pull_parser(client_message);
+            UpdateList(ROOT_DIR);
 
         } else {
             

@@ -36,7 +36,7 @@ replica: hello.o md5.o testdb.o filetransfer.o thread_server.o
 	echo $(OPTION)
 	$(CC) -o replica hello.o md5.o testdb.o filetransfer.o thread_server.o $(CCFLAGS)  -lcurl  $(OPTION)
 
-hello.o: hello.c list.h md5.h testdb.h filetransfer.h thread_server.h 
+hello.o: hello.c hello.h list.h md5.h testdb.h filetransfer.h thread_server.h 
 	$(CC) -c -Wall hello.c  $(CCFLAGS) -lcurl  $(OPTION)
 
 md5.o: md5.c md5.h
