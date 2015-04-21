@@ -4,25 +4,58 @@ import socket
 import thread
 import hashlib
 
+MAX_REPLICA = 6 #The maximum number of Replica Nodes here
+REPLICA_COUNT = MAX_REPLICA #Keep track of how many replica can still register until table is full
+REPLICA_PER_FILE = MAX_REPLICA / 2 #Number of Replica to upload a file to
+RANDOM_NUMBER = 4 #Used to randomly determine ReplicaID to upload a file to in whichReplicaID Function
+
 def updateTable(objID,Version):
 	con = MySQLdb.connect('localhost','catfuser','catfuser','testdb')
 	with con:
 		cur = con.cursor()
 		cur.execute("DELETE FROM PhotoObjects WHERE ObjID = \'%s\' AND Version < %s"%(objID,Version))
-		 
+
+def whichReplicaID(objHash):
+	#Under the assumption that six replicas have registered with the database, this function takes the objHash
+	#and perform calculations to determine what replicas to upload the objHash to.
+	global REPLICA_PER_FILE,RANDOM_NUMBER,MAX_REPLICA
+	value = 0
+	replicaList = list()
+
+	for i in range(0,RANDOM_NUMBER):
+		value = ord(objHash[i])
+
+	for i in range(0,REPLICA_PER_FILE):
+		a = (value%MAX_REPLICA)+i
+		if a > MAX_REPLICA:
+			a = a - MAX_REPLICA
+		if a == 0: a = a + MAX_REPLICA
+		replicaList.append(a)
+
+	return replicaList
 
 def dbPOST(objID,Version,objHash):
-	updateTable(objID,Version)	
+	updateTable(objID,Version)
+	replicaList = whichReplicaID(objHash)
+	#msg = ""
+	#for replicaID in replicaList:
+	#	msg = msg + "%s,"%replicaID
+	#msg = msg[:-1]
+	
 	try:
 		con = MySQLdb.connect('localhost','catfuser','catfuser','testdb')
 		with con:
 			cur = con.cursor()
 			cur.execute("INSERT INTO PhotoObjects VALUES(\'%s\',%s,\'%s\')"%(objID,Version,objHash))
+			for replicaID in replicaList:
+				cur.execute("INSERT INTO DistFile VALUES(\'%s\',%s)" %(objHash,replicaID))
 	except:
 		return "POST_ERROR"
-	return "POST_OK"
 
+	return "POST_OK"
+'''
 def dbGET(objID):
+
 	try:
 		con = MySQLdb.connect('localhost','catfuser','catfuser','testdb')
 		with con:
@@ -30,8 +63,34 @@ def dbGET(objID):
 			cur.execute("SELECT PathHash FROM PhotoObjects WHERE ObjID = \"%s\" ORDER BY Version DESC LIMIT 1"%objID)
 			results = cur.fetchall()
 	except:
-		return "GET_ERROR"		
+		return "GET_ERROR"
 	return results[0][0]
+'''
+
+def dbGET(objIDList):
+	msg = ""
+	objList = objIDList.split(":")
+	try:
+		con = MySQLdb.connect('localhost','catfuser','catfuser','testdb')
+		with con:
+			cur = con.cursor()
+			for  objID in objList:
+				cur.execute("SELECT PathHash FROM PhotoObjects WHERE ObjID = \"%s\" ORDER BY Version DESC LIMIT 1"%objID)
+				objHashrow = cur.fetchall()
+
+				cur.execute("SELECT ReplicaID FROM DistFile WHERE PathHash = \"%s\""% objHashrow[0][0])
+				replicaIDrow = cur.fetchall()
+				
+				cur.execute("SELECT ReplicaIP,ReplicaPORT FROM  Replica WHERE ReplicaID = %s" % replicaIDrow[0][0])
+				replicaIP_PORTrow = cur.fetchall()
+				print replicaIP_PORTrow[0][0]
+				print replicaIP_PORTrow[0][1]
+				msg = msg + "%s:%s:%s:%s," % (objID,replicaIDrow[0][0],replicaIP_PORTrow[0][0],replicaIP_PORTrow[0][1])
+
+
+	except:
+		return "GET_ERROR"
+	return msg[:-1]
 
 def dbDELETE(objID):
 	try:
@@ -43,16 +102,30 @@ def dbDELETE(objID):
 		return "DELETE_ERROR"
 	return "DELETE_OK"
 
-def dbLIST():
+def dbLIST(clientSock,clientAddr):
+	replicaIP = clientAddr[0]
+	replicaPORT = int(clientAddr[1])
 	msg = ""
 	try:
 		con = MySQLdb.connect('localhost','catfuser','catfuser','testdb')
 		with con:
 			cur = con.cursor()
-			cur.execute("SELECT * FROM PhotoObjects")
+			cur.execute("SELECT ReplicaID FROM Replica WHERE ReplicaIP = \'%s\' AND ReplicaPORT = %s" % (replicaIP,replicaPORT))
+
+			#print "replicaID from %s : %s is %s" %(replicaIP,replicaPORT,cur.fetchall()[0][0])
+			replicaID = cur.fetchall()[0][0]
+
+			#print "replicaID is %s" % replicaID
+			cur.execute("SELECT PathHash FROM DistFile WHERE ReplicaID = %s" % replicaID)
 			rows = cur.fetchall()
 			for row in rows:
-				msg = msg + "(%s,%s,%s)" % (row[0],row[1],row[2])
+				cur.execute("SELECT * FROM PhotoObjects WHERE PathHash = \'%s\'" %row[0])
+				subrow = cur.fetchall()
+				#print "subrow = %s" % subrow
+				#print subrow[0][0]
+				#print subrow[0][1]
+				#print subrow[0][2]
+				msg = msg + "(%s,%s,%s)" % (subrow[0][0],subrow[0][1],subrow[0][2])
 	except:
 		return "LIST_ERROR"
 	return msg			
@@ -72,7 +145,7 @@ def dbREQ(requestFile,clientSock,clientAddr):
 
 def contactMasterNode(reqMSG):
 	master = "localhost"
-	port = 12346
+	port = 12346 #Assume that master is using port 123456
 	buf = 1234
 
 	clientSock = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
@@ -86,12 +159,73 @@ def contactMasterNode(reqMSG):
 				break
 			else:
 				print recvdata
-				break
 		except socket.error,e:
-			print "Cannot contact the master node"
+			if "Connection refused" in e:
+				print "*** Connection Refused ***"
 			break
 
 	clientSock.close()
+
+
+def regREP(clientSock,clientAddr):
+	global REPLICA_COUNT
+	print "Receive replica connection request from %s : %s \n" % (clientAddr[0],clientAddr[1])
+	replicaIP = clientAddr[0]
+	replicaPORT = int(clientAddr[1])
+
+	if REPLICA_COUNT != 0:
+		replicaID = REPLICA_COUNT
+		REPLICA_COUNT = REPLICA_COUNT - 1
+
+		try:
+			con = MySQLdb.connect('localhost','catfuser','catfuser','testdb')
+			with con:
+				cur = con.cursor()
+				print "Registering Replica%s IP:%s PORT:%s" % (replicaID,replicaIP,replicaPORT)
+				cur.execute("INSERT INTO Replica VALUES(%s,\'%s\',%s)"%(replicaID,replicaIP,replicaPORT))
+			msg = "REPLICA_ID:%s" % replicaID
+			
+		except:
+			msg = "REGISTER_ERROR"
+	else:
+		print "REPLICA TABLE FULL: Cannot provide ID for connection request from %s : %s \n" % (clientAddr[0],clientAddr[1])
+		msg = "REPLICA_TABLE_FULL"
+	return msg
+
+def masterLIST():
+
+	#chosenList = list()
+	#msg = ""
+	#try:
+	#	con = MySQLdb.connect('localhost','catfuser','catfuser','testdb')
+	#	with con:
+	#		cur = con.cursor()
+	#		cur.execute("SELECT PathHash FROM PhotoObjects");
+	#		rows = cur.fetchall()
+	#		for row in rows:
+	#			cur.execute("SELECT ReplicaID FROM DistFile WHERE PathHash = \'%s\'" % row[0])
+	#			repIDrow = cur.fetchall()
+	#			print repIDrow[0][0]
+	#			cur.execute("SELECT ReplicaIP,ReplicaPORT FROM Replica WHERE ReplicaID = %s" % repIDrow[0][0])
+	#			ip_port_row = cur.fetchall()
+	#			print ip_port_row[0][0],ip_port_row[0][1]
+	#			msg = msg + "%s:%s:%s:%s," % (row[0],repIDrow[0][0],ip_port_row[0][0],ip_port_row[0][1]) 
+	#except:
+	#	return "GET_FILE_AND_LOCATION_ERROR"
+
+	#return msg[:-1]
+	msg = ""
+	try:
+		con = MySQLdb.connect('localhost','catfuser','catfuser','testdb')
+		with con:
+			cur = con.cursor()
+			cur.execute("SELECT * FROM PhotoObjects")
+			filerow = cur.fetchall()
+			for row in filerow:
+				msg = msg + "(%s,%s,%s)" % (row[0],row[1],row[2])
+	except:
+		return "MASTER_LIST_ERROR"
+	return msg
 
 def clientHandler(clientSock,clientAddr):
 	try:
@@ -101,16 +235,27 @@ def clientHandler(clientSock,clientAddr):
 
 	if int(query[0]) == 0: # POST
 		msg = dbPOST(query[1],int(query[2]),query[3])
+
 	elif int(query[0]) == 1: # GET
 		msg = dbGET(query[1])
+
 	elif int(query[0]) == 2: # DELETE
 		msg = dbDELETE(query[1])
+
 	elif int(query[0]) == 3: # LIST
-		msg = dbLIST()
+		msg = dbLIST(clientSock,clientAddr)
 		if len(msg) == 0:
-			msg = "EMPTY" 	
+			msg = "EMPTY"
+
 	elif int(query[0]) == 4: # REQUEST_FILE
-		msg = dbREQ(query[1],clientSock,clientAddr) 	
+		msg = dbREQ(query[1],clientSock,clientAddr)
+
+	elif int(query[0]) == 5: # REGISTER REPLICA 
+		msg = regREP(clientSock,clientAddr)
+
+	elif int(query[0]) == 6: # MASTER LIST
+		msg = masterLIST()
+
 	else:
 		msg = "Invalid Query"
 
@@ -125,7 +270,12 @@ def resetDB():
 	with con:
 		cur = con.cursor()
 		cur.execute("DROP TABLE IF EXISTS PhotoObjects")
+		cur.execute("DROP TABLE IF EXISTS Replica")
+		cur.execute("DROP TABLE IF EXISTS DistFile")
 		cur.execute("CREATE TABLE PhotoObjects(ObjID VARCHAR(255),Version INT,PathHash CHAR(32))")
+		cur.execute("CREATE TABLE Replica(ReplicaID INT, ReplicaIP VARCHAR(255), ReplicaPORT INT )")
+		cur.execute("CREATE TABLE DistFile(PathHash CHAR(32),ReplicaID INT)")
+
 		#cur.execute("INSERT INTO PhotoObjects Values(\'host\',1,\'%s\') " %(str(m.hexdigest())))
 		#cur.execute("INSERT INTO PhotoObjects Values(\'A\',1,\'A\')");
 		#cur.execute("INSERT INTO PhotoObjects Values(\'B\',1,\'B\')");
@@ -139,7 +289,7 @@ def resetDB():
 	#print msg
 
 def main():
-	resetDB()
+	#resetDB()
 	host = 'localhost'
 	port = 12345
 	buf = 1024
