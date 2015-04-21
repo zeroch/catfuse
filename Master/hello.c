@@ -135,18 +135,14 @@ int getDBList(){
     for(i=0; i<30; i++){
       if(my_cache_list[i]!=NULL && strcmp(my_cache_list[i]->name,o->name)==0){
 	int db_timestamp = atoi(my_cache_list[i]->version);
-	if(db_timestamp<o->tv.tv_sec){
-	  //db_version is older? ignore
-	}else if(db_timestamp==o->tv.tv_sec){
-	    #ifdef DEBUG
-	  writeLogFile(o->name);
-	  writeLogFile("Same Timestamp!");
-	    #endif
-	  //same timestamp, same name, actually we do not need to check md5 now
+	if(db_timestamp<=o->tv.tv_sec){
+	  //ignore it
 	}else{
-	  //db has newer version, acquire it
-	  strcat(acquire_list,o->name);
-	  strcat(acquire_list,",");
+	  //db has newer version,compare hash to decide whether to acquire it
+	  if(strcmp(o->md5_hash,my_cache_list[i]->md5_hash)!=0){
+	    strcat(acquire_list,o->name);
+	    strcat(acquire_list,",");
+	  }
 	}
 	free(my_cache_list[i]);
 	my_cache_list[i] = NULL;
