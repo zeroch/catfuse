@@ -106,7 +106,7 @@ def dbDELETE(objID):
 		return "DELETE_ERROR"
 	return "DELETE_OK"
 
-def dbLIST(clientSock,clientAddr):
+def dbLIST(clientSock,clientAddr,replicaID):
 	replicaIP = clientAddr[0]
 	replicaPORT = int(clientAddr[1])
 	msg = ""
@@ -114,10 +114,12 @@ def dbLIST(clientSock,clientAddr):
 		con = MySQLdb.connect('localhost','catfuser','catfuser','testdb')
 		with con:
 			cur = con.cursor()
-			cur.execute("SELECT ReplicaID FROM Replica WHERE ReplicaIP = \'%s\' AND ReplicaPORT = %s" % (replicaIP,replicaPORT))
-
+			#print replicaIP, replicaPORT
+			#cur.execute("SELECT ReplicaID FROM Replica WHERE ReplicaIP = \'%s\'" % (replicaIP))
+			#print "replica connected"
 			#print "replicaID from %s : %s is %s" %(replicaIP,replicaPORT,cur.fetchall()[0][0])
-			replicaID = cur.fetchall()[0][0]
+			#print cur.fetchall()
+			#replicaID = cur.fetchall()[0][0]
 
 			#print "replicaID is %s" % replicaID
 			cur.execute("SELECT PathHash FROM DistFile WHERE ReplicaID = %s" % replicaID)
@@ -125,10 +127,10 @@ def dbLIST(clientSock,clientAddr):
 			for row in rows:
 				cur.execute("SELECT * FROM PhotoObjects WHERE PathHash = \'%s\'" %row[0])
 				subrow = cur.fetchall()
-				#print "subrow = %s" % subrow
-				#print subrow[0][0]
-				#print subrow[0][1]
-				#print subrow[0][2]
+				print "subrow = %s" % subrow
+				print subrow[0][0]
+				print subrow[0][1]
+				print subrow[0][2]
 				msg = msg + "(%s,%s,%s)" % (subrow[0][0],subrow[0][1],subrow[0][2])
 	except:
 		return "LIST_ERROR"
@@ -181,7 +183,7 @@ def regREP(clientSock,clientAddr):
 				cur = con.cursor()
 				print "Registering Replica%s IP:%s PORT:%s" % (replicaID,replicaIP,replicaPORT)
 				cur.execute("INSERT INTO Replica VALUES(%s,\'%s\',%s)"%(replicaID,replicaIP,replicaPORT))
-			msg = "REPLICA_ID:%s" % replicaID
+			msg = "%s" % replicaID
 			
 		except:
 			msg = "REGISTER_ERROR"
@@ -252,7 +254,8 @@ def clientHandler(clientSock,clientAddr):
 		msg = dbDELETE(query[1])
 
 	elif int(query[0]) == 3: # LIST
-		msg = dbLIST(clientSock,clientAddr)
+		replicaID = query[1]
+		msg = dbLIST(clientSock,clientAddr,replicaID)
 		if len(msg) == 0:
 			msg = "EMPTY"
 
@@ -272,7 +275,7 @@ def clientHandler(clientSock,clientAddr):
 	clientSock.close()
 	
 	if int(query[0]) == 6:
-		masterList()
+		masterLIST()
 
 
 def resetDB():
@@ -302,7 +305,7 @@ def resetDB():
 	#print msg
 
 def main():
-	#resetDB()
+	resetDB()
 	host = 'localhost'
 	port = 12345
 	buf = 1024
