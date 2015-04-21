@@ -14,13 +14,11 @@ sys:
 	@echo 'THIS IS LINUX'
 endif
 
-# CCFLAGS +=	-DDEBUG
+CCFLAGS +=	-DTEST
  
 ifeq ($(MAKECMDGOALS),master)
-halo:
 	CCFLAGS +=	-DMASTER
 else ifeq ($(MAKECMDGOALS),replica)
-halo:
 	CCFLAGS +=	-DREPLICA
 endif
 
