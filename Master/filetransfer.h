@@ -9,11 +9,32 @@
 #include <unistd.h>
 
 
-#define USERNAME        "ubuntu"
-#define PASSWD          "catfuse"
+#define USERNAME        "catgt"
+#define PASSWD          "hackgt"
+
+
+#ifdef M
+
+#define REMOTE_URL      "ftp://zeroc.at/tmp" // UPLOAD_FILE_AS
+#define ROOT_DIR 		"/home/zechen/fuse"
+
+#elif YY
 
 #define REMOTE_URL      "ftp://localhost/remote_tmp" // UPLOAD_FILE_AS
-#define ROOT_DIR "/tmp"
+#define ROOT_DIR 		"/tmp"
+
+#elif CX
+
+#define REMOTE_URL      "ftp://zeroc.at/cat1" // UPLOAD_FILE_AS
+#define ROOT_DIR 		"/home/catgt/cat1"
+
+#elif CY
+
+#define REMOTE_URL      "ftp://zeroc.at/cat2" // UPLOAD_FILE_AS
+#define ROOT_DIR 		"/home/catgt/cat1"
+
+#endif
+
 
 struct FtpFile
 {
