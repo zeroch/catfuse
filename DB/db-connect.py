@@ -72,7 +72,7 @@ def dbGET(objID):
 '''
 
 def dbGET(objIDList):
-	msg = ""
+	msg = "pull,"
 	objList = objIDList.split(":")
 	try:
 		con = MySQLdb.connect('localhost','catfuser','catfuser','testdb')
@@ -84,17 +84,12 @@ def dbGET(objIDList):
 
 				cur.execute("SELECT ReplicaID FROM DistFile WHERE PathHash = \"%s\""% objHashrow[0][0])
 				replicaIDrow = cur.fetchall()
-				
-				cur.execute("SELECT ReplicaIP,ReplicaPORT FROM  Replica WHERE ReplicaID = %s" % replicaIDrow[0][0])
-				replicaIP_PORTrow = cur.fetchall()
-				print replicaIP_PORTrow[0][0]
-				print replicaIP_PORTrow[0][1]
-				msg = msg + "%s:%s:%s:%s," % (objID,replicaIDrow[0][0],replicaIP_PORTrow[0][0],replicaIP_PORTrow[0][1])
+				msg = msg + "%s:cat%s," % (objID,replicaIDrow[0][0])
 
 
 	except:
 		return "GET_ERROR"
-	return msg[:-1]
+	return msg
 
 def dbDELETE(objID):
 	try:
@@ -137,14 +132,13 @@ def dbLIST(clientSock,clientAddr,replicaID):
 	return msg			
 
 
-def dbREQ(requestFile,clientSock,clientAddr):
+def dbREQ(requestFile,clientSock,clientAddr,replica_id):
 	requestList = requestFile.split(":")
-	strReq = ""
+	strReq = "push,cat"+str(replica_id) 
 
 	for reqfile in requestList:
 		strReq = strReq + "," + reqfile
 		
-	reqMSG = clientAddr[0] + strReq
 	thread.start_new_thread(contactMasterNode,(reqMSG,))
 
 	return "REQUEST_OK"
@@ -227,12 +221,24 @@ def masterLIST():
 	except:
 		return
 
+	recvdata = None
 	try:
 		masterSock.send(msg)
+		recvdata = masterSock.recv(buf)
 	except socket.error,e:
 		if "Connection refused" in e:
 			print "--- Connection Refused ---"
 	
+	print recvdata
+	msg = dbGET(recvdata)
+
+	try:
+		masterSock.send(msg)
+		recvdata = masterSock.recv(buf)
+	except socket.error,e:
+		if "Connection refused" in e:
+			print "--- Connection Refused ---"
+
 
 
 	
@@ -260,7 +266,8 @@ def clientHandler(clientSock,clientAddr):
 			msg = "EMPTY"
 
 	elif int(query[0]) == 4: # REQUEST_FILE
-		msg = dbREQ(query[1],clientSock,clientAddr)
+		replica_id = query[1]
+		msg = dbREQ(query[2],clientSock,clientAddr,replica_id)
 
 	elif int(query[0]) == 5: # REGISTER REPLICA 
 		msg = regREP(clientSock,clientAddr)

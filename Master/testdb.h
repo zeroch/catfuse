@@ -7,5 +7,5 @@ void getContent(char* obj_id, char* reply);
 void postContent(char* obj_id,int version,char* hash,char* reply);
 void delContent(char* obj_id,char* reply);
 void listContent(char* reply,int replica_id);
-void sendList(char* objList, char* reply);
+void sendList(char* objList, char* reply, int replica_id);
 int regReplica();
