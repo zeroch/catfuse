@@ -10,6 +10,9 @@
 #define PORT    "3000" /* Port to listen on */
 #define BACKLOG     10  /* Passed to listen() */
 
+#define DB_PORT 12345
+#define DB_IP 	"127.0.0.1"
+
 void *handle(void *pnewsock);
 int socket_init(void );
 

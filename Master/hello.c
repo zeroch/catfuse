@@ -703,6 +703,7 @@ int main(int argc, char *argv[])
   list_init(&entries);
   UpdateList(ROOT_DIR);
     // socket_init();
+    kick_start();
 
   
     int sock;
@@ -752,7 +753,7 @@ int main(int argc, char *argv[])
     puts("Waiting for incoming connections...");
 
     /* Main loop */
-    /*
+    
     while (1) {
         size_t size = sizeof(struct sockaddr_in);
         struct sockaddr_in their_addr;
@@ -768,7 +769,7 @@ int main(int argc, char *argv[])
             }
             break;
         }
-	}*/
+	}
 
 
   int res = fuse_main(argc, argv, &hello_oper, NULL);
