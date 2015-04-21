@@ -53,8 +53,9 @@ def dbPOST(objID,Version,objHash):
 		return "POST_ERROR"
 
 	return "POST_OK"
-
+'''
 def dbGET(objID):
+
 	try:
 		con = MySQLdb.connect('localhost','catfuser','catfuser','testdb')
 		with con:
@@ -64,6 +65,32 @@ def dbGET(objID):
 	except:
 		return "GET_ERROR"
 	return results[0][0]
+'''
+
+def dbGET(objIDList):
+	msg = ""
+	objList = objIDList.split(":")
+	try:
+		con = MySQLdb.connect('localhost','catfuser','catfuser','testdb')
+		with con:
+			cur = con.cursor()
+			for  objID in objList:
+				cur.execute("SELECT PathHash FROM PhotoObjects WHERE ObjID = \"%s\" ORDER BY Version DESC LIMIT 1"%objID)
+				objHashrow = cur.fetchall()
+
+				cur.execute("SELECT ReplicaID FROM DistFile WHERE PathHash = \"%s\""% objHashrow[0][0])
+				replicaIDrow = cur.fetchall()
+				
+				cur.execute("SELECT ReplicaIP,ReplicaPORT FROM  Replica WHERE ReplicaID = %s" % replicaIDrow[0][0])
+				replicaIP_PORTrow = cur.fetchall()
+				print replicaIP_PORTrow[0][0]
+				print replicaIP_PORTrow[0][1]
+				msg = msg + "%s:%s:%s:%s," % (objID,replicaIDrow[0][0],replicaIP_PORTrow[0][0],replicaIP_PORTrow[0][1])
+
+
+	except:
+		return "GET_ERROR"
+	return msg[:-1]
 
 def dbDELETE(objID):
 	try:
@@ -163,6 +190,41 @@ def regREP(clientSock,clientAddr):
 		msg = "REPLICA_TABLE_FULL"
 	return msg
 
+def masterLIST():
+
+	#chosenList = list()
+	#msg = ""
+	#try:
+	#	con = MySQLdb.connect('localhost','catfuser','catfuser','testdb')
+	#	with con:
+	#		cur = con.cursor()
+	#		cur.execute("SELECT PathHash FROM PhotoObjects");
+	#		rows = cur.fetchall()
+	#		for row in rows:
+	#			cur.execute("SELECT ReplicaID FROM DistFile WHERE PathHash = \'%s\'" % row[0])
+	#			repIDrow = cur.fetchall()
+	#			print repIDrow[0][0]
+	#			cur.execute("SELECT ReplicaIP,ReplicaPORT FROM Replica WHERE ReplicaID = %s" % repIDrow[0][0])
+	#			ip_port_row = cur.fetchall()
+	#			print ip_port_row[0][0],ip_port_row[0][1]
+	#			msg = msg + "%s:%s:%s:%s," % (row[0],repIDrow[0][0],ip_port_row[0][0],ip_port_row[0][1]) 
+	#except:
+	#	return "GET_FILE_AND_LOCATION_ERROR"
+
+	#return msg[:-1]
+	msg = ""
+	try:
+		con = MySQLdb.connect('localhost','catfuser','catfuser','testdb')
+		with con:
+			cur = con.cursor()
+			cur.execute("SELECT * FROM PhotoObjects")
+			filerow = cur.fetchall()
+			for row in filerow:
+				msg = msg + "(%s,%s,%s)" % (row[0],row[1],row[2])
+	except:
+		return "MASTER_LIST_ERROR"
+	return msg
+
 def clientHandler(clientSock,clientAddr):
 	try:
 		query = clientSock.recv(1024).split(",")
@@ -171,18 +233,27 @@ def clientHandler(clientSock,clientAddr):
 
 	if int(query[0]) == 0: # POST
 		msg = dbPOST(query[1],int(query[2]),query[3])
+
 	elif int(query[0]) == 1: # GET
 		msg = dbGET(query[1])
+
 	elif int(query[0]) == 2: # DELETE
 		msg = dbDELETE(query[1])
+
 	elif int(query[0]) == 3: # LIST
 		msg = dbLIST(clientSock,clientAddr)
 		if len(msg) == 0:
 			msg = "EMPTY"
+
 	elif int(query[0]) == 4: # REQUEST_FILE
 		msg = dbREQ(query[1],clientSock,clientAddr)
+
 	elif int(query[0]) == 5: # REGISTER REPLICA 
-		msg = regREP(clientSock,clientAddr) 	
+		msg = regREP(clientSock,clientAddr)
+
+	elif int(query[0]) == 6: # MASTER LIST
+		msg = masterLIST()
+
 	else:
 		msg = "Invalid Query"
 
