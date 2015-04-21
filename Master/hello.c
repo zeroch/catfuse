@@ -18,6 +18,7 @@
 #include <unistd.h>
 #include <time.h>
 
+#include "thread_server.h"
 #include "filetransfer.h"
 #include <dirent.h>
 
@@ -668,9 +669,76 @@ int main(int argc, char *argv[])
 
   list_init(&entries);
   UpdateList(ROOT_DIR);
+    // socket_init();
+
+
+    int sock;
+    pthread_t thread;
+    struct addrinfo hints, *ret;
+    int reuseaddr = 1; /* True */
+
+    /* Get the address info */
+    memset(&hints, 0, sizeof hints);
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+    if (getaddrinfo(NULL, PORT, &hints, &ret) != 0) {
+        perror("getaddrinfo");
+        return 1;
+    }
+
+    /* Create the socket */
+    sock = socket(ret->ai_family, ret->ai_socktype, ret->ai_protocol);
+    if (sock == -1) {
+        perror("socket");
+        return 1;
+    }
+    puts("Socket created");
+
+    /* Enable the socket to reuse the address */
+    if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &reuseaddr, sizeof(int)) == -1) {
+        perror("setsockopt");
+        return 1;
+    }
+
+    /* Bind to the address */
+    if (bind(sock, ret->ai_addr, ret->ai_addrlen) == -1) {
+        perror("bind");
+        return 0;
+    }
+    puts("bind done");
+
+    freeaddrinfo(ret);
+
+    /* Listen */
+    if (listen(sock, BACKLOG) == -1) {
+        perror("listen");
+        return 0;
+    }
+    puts("Waiting for incoming connections...");
+
+    /* Main loop */
+    while (1) {
+        size_t size = sizeof(struct sockaddr_in);
+        struct sockaddr_in their_addr;
+        size_t newsock = accept(sock, (socklen_t *)&their_addr, &size);
+        if (newsock == -1) {
+            perror("accept");
+        }
+        else {
+            printf("Got a connection from %s on port %d\n", 
+                    inet_ntoa(their_addr.sin_addr), htons(their_addr.sin_port));
+            if (pthread_create(&thread, NULL, handle, &newsock) != 0) {
+                fprintf(stderr, "Failed to create thread\n");
+            }
+            break;
+        }
+    }
+
 
   int res = fuse_main(argc, argv, &hello_oper, NULL);
   
+
+
   #ifdef DEBUG
   fclose(log_file);
   #endif

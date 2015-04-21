@@ -12,10 +12,10 @@ sys:
 endif
 
 CC := gcc
-hello: hello.o md5.o testdb.o filetransfer.o
-	$(CC) -o hello hello.o md5.o testdb.o filetransfer.o $(CCFLAGS)  -lcurl
+hello: hello.o md5.o testdb.o filetransfer.o thread_server.o
+	$(CC) -o hello hello.o md5.o testdb.o filetransfer.o  thread_server.o $(CCFLAGS)  -lcurl
 
-hello.o: hello.c list.h md5.h testdb.h filetransfer.h
+hello.o: hello.c list.h md5.h testdb.h filetransfer.h thread_server.h
 	$(CC) -c -Wall hello.c  $(CCFLAGS) -lcurl
 
 md5.o: md5.c md5.h
@@ -26,9 +26,12 @@ testdb.o: testdb.c testdb.h
 filetransfer.o: filetransfer.c filetransfer.h
 	$(CC) -c -Wall filetransfer.c -lcurl
 
+thread_server.o: thread_server.c thread_server.h
+	$(CC) -c -Wall thread_server.c  -lpthread
+
 
 clean:
-	rm *.o hello
+	rm *.o hello 
 
 test:
-	@echo './hello ~/dev/tmp/cat -o defer_permissions'
+	@echo './hello ~/dev -d  -o nonempty'
