@@ -17,6 +17,9 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <time.h>
+
+#include "thread_server.h"
+#include "filetransfer.h"
 #include <dirent.h>
 
 #include "list.h"
@@ -25,7 +28,6 @@
 
 #define MAX_RETRY 3
 #define MAX_NAMELEN 255
-
 
 extern void MD5_Init(MD5_CTX *ctx);
 extern void MD5_Update(MD5_CTX *ctx, const void *data, unsigned long size);
@@ -51,7 +53,7 @@ struct cache_index{
 
 static void fullPath(char fpath[MAX_NAMELEN], const char * path)
 {
-  strcpy(fpath, "/tmp");
+  strcpy(fpath, ROOT_DIR);
   strncat(fpath, path, MAX_NAMELEN);
 }
 
@@ -248,7 +250,6 @@ void update_md5(struct ou_entry* entry){
   #endif
 }
 
-  
 
 static int my_getattr(const char *path, struct stat *st)
 {
@@ -274,7 +275,7 @@ static int my_getattr(const char *path, struct stat *st)
   
   //read regular file
   char whole_path[MAX_NAMELEN];
-  sprintf(whole_path,"/tmp%s",path);
+  fullPath(whole_path, path);
   int res;
 
   res = lstat(whole_path,st);
@@ -341,7 +342,7 @@ static int my_utimens(const char *path, const struct timespec ts[2])
 {
   int res;
   char whole_path[MAX_NAMELEN];
-  sprintf(whole_path,"/tmp%s",path);
+  fullPath(whole_path, path);
 
 #ifndef OSX
   res = utimensat(0, whole_path, ts, AT_SYMLINK_NOFOLLOW);
@@ -378,7 +379,7 @@ static int my_chmod(const char * path, mode_t new_mode)
 {
   int res;
   char whole_path[MAX_NAMELEN];
-  sprintf(whole_path,"/tmp%s",path);
+  fullPath(whole_path, path);
 
   res = chmod(whole_path, new_mode);
   if (res == -1)
@@ -404,7 +405,7 @@ static int my_chown(const char * path, uid_t uid, gid_t gid)
 {
   int res;
   char whole_path[MAX_NAMELEN];
-  sprintf(whole_path,"/tmp%s",path);
+  fullPath(whole_path, path);
 
   res = chown(whole_path, uid, gid);
   if (res == -1)
@@ -421,7 +422,7 @@ static int my_open(const char *path, struct fuse_file_info *fi)
 {
   int res = 0;
   char whole_path[MAX_NAMELEN];
-  sprintf(whole_path,"/tmp%s",path);
+  fullPath(whole_path, path);
 
   res = open(whole_path, fi->flags);
   if(res==-1)
@@ -464,9 +465,11 @@ static int my_write(const char *path, const char *buf, size_t size,
     if (strcmp(path + 1, o->name) == 0) {
       o->tv.tv_sec = time(NULL);
       update_md5(o);
+      transfer_put(o->name);
       return res;
     }
   }
+
 
 
   return res;
@@ -478,7 +481,7 @@ static int my_truncate(const char *path, off_t size)
   int res;
 
   char whole_path[MAX_NAMELEN];
-  sprintf(whole_path,"/tmp%s",path);
+  fullPath(whole_path, path);
 
   res = truncate(whole_path, size);
   if (res == -1)
@@ -490,8 +493,11 @@ static int my_rename(const char *from, const char *to)
 {
   int res;
   res = rename(from, to);
+  printf("this is rename from: %s, and goto : %s\n", from, to );
+  transfer_get(from, to);
   if (res == -1)
     return -errno;
+
   return 0;
 }
 
@@ -572,7 +578,7 @@ static int my_create(const char* path, mode_t mode, struct fuse_file_info* fi)
   list_add_prev(&o->node, &entries);
 
   char whole_path[MAX_NAMELEN];
-  sprintf(whole_path,"/tmp%s",path);
+  fullPath(whole_path, path);
 
   
   int res = 0;
@@ -588,8 +594,8 @@ static int my_create(const char* path, mode_t mode, struct fuse_file_info* fi)
   }
 
   fi->fh = res;
+  //writeLogFile("File Created!");
 
-  
   return 0;
 }
 
@@ -599,15 +605,18 @@ static int my_unlink(const char* path)
   
 
   char whole_path[MAX_NAMELEN];
-  sprintf(whole_path,"/tmp%s",path);
+  fullPath(whole_path, path);
   int res;
   list_for_each_safe (n, p, &entries) {
     struct ou_entry* o = list_entry(n, struct ou_entry, node);
     if (strcmp(path + 1, o->name) == 0) {
       __list_del(n);
       res = unlink(whole_path);
+
+      transfer_delete(o->name);
+
       if(res==-1)
-	return -errno;
+	       return -errno;
 
       #ifdef MASTER
       //tell db to delete record
@@ -615,6 +624,7 @@ static int my_unlink(const char* path)
       delContent(o->name,server_reply);
       int retry=0;
       
+
       while(strcmp(server_reply,"DELETE_OK")!=0&&retry<MAX_RETRY){
 	delContent(o->name,server_reply);
 	retry++;
@@ -693,10 +703,80 @@ int main(int argc, char *argv[])
   #endif
 
   list_init(&entries);
-  UpdateList("/tmp/");
+  UpdateList(ROOT_DIR);
+    // socket_init();
+
+  
+    int sock;
+    pthread_t thread;
+    struct addrinfo hints, *ret;
+    int reuseaddr = 1; /* True */
+
+
+
+    /* Get the address info */
+    memset(&hints, 0, sizeof hints);
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+    if (getaddrinfo(NULL, PORT, &hints, &ret) != 0) {
+        perror("getaddrinfo");
+        return 1;
+    }
+
+    /* Create the socket */
+    sock = socket(ret->ai_family, ret->ai_socktype, ret->ai_protocol);
+    if (sock == -1) {
+        perror("socket");
+        return 1;
+    }
+    puts("Socket created");
+
+    /* Enable the socket to reuse the address */
+    if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &reuseaddr, sizeof(int)) == -1) {
+        perror("setsockopt");
+        return 1;
+    }
+
+    /* Bind to the address */
+    if (bind(sock, ret->ai_addr, ret->ai_addrlen) == -1) {
+        perror("bind");
+        return 0;
+    }
+    puts("bind done");
+
+    freeaddrinfo(ret);
+
+    /* Listen */
+    if (listen(sock, BACKLOG) == -1) {
+        perror("listen");
+        return 0;
+    }
+    puts("Waiting for incoming connections...");
+
+    /* Main loop */
+    /*
+    while (1) {
+        size_t size = sizeof(struct sockaddr_in);
+        struct sockaddr_in their_addr;
+        size_t newsock = accept(sock, (socklen_t *)&their_addr, &size);
+        if (newsock == -1) {
+            perror("accept");
+        }
+        else {
+            printf("Got a connection from %s on port %d\n", 
+                    inet_ntoa(their_addr.sin_addr), htons(their_addr.sin_port));
+            if (pthread_create(&thread, NULL, handle, &newsock) != 0) {
+                fprintf(stderr, "Failed to create thread\n");
+            }
+            break;
+        }
+	}*/
+
 
   int res = fuse_main(argc, argv, &hello_oper, NULL);
   
+
+
   #ifdef DEBUG
   fclose(log_file);
   #endif
