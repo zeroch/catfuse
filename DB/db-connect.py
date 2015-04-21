@@ -191,27 +191,28 @@ def regREP(clientSock,clientAddr):
 	return msg
 
 def masterLIST():
+	time.sleep(1)
+	master = "localhost"
+	port = 3000
+	buf = 1234
+	global masterSock
+	masterSock = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+	masterSock.connect((master,port))
+	while True:
+		try:
+			masterSock.send("Test Connect")
+			recvdata = masterSock.recv(buf)
+			if recvdata:
+				print recvdata
+			if recvdata == "Test Connect":
+				break
+		except socket.error,e:
+			if "Connection refused" in e:
+				print "--- Connection Refused ---"
+				break
 
-	#chosenList = list()
-	#msg = ""
-	#try:
-	#	con = MySQLdb.connect('localhost','catfuser','catfuser','testdb')
-	#	with con:
-	#		cur = con.cursor()
-	#		cur.execute("SELECT PathHash FROM PhotoObjects");
-	#		rows = cur.fetchall()
-	#		for row in rows:
-	#			cur.execute("SELECT ReplicaID FROM DistFile WHERE PathHash = \'%s\'" % row[0])
-	#			repIDrow = cur.fetchall()
-	#			print repIDrow[0][0]
-	#			cur.execute("SELECT ReplicaIP,ReplicaPORT FROM Replica WHERE ReplicaID = %s" % repIDrow[0][0])
-	#			ip_port_row = cur.fetchall()
-	#			print ip_port_row[0][0],ip_port_row[0][1]
-	#			msg = msg + "%s:%s:%s:%s," % (row[0],repIDrow[0][0],ip_port_row[0][0],ip_port_row[0][1]) 
-	#except:
-	#	return "GET_FILE_AND_LOCATION_ERROR"
 
-	#return msg[:-1]
+
 	msg = ""
 	try:
 		con = MySQLdb.connect('localhost','catfuser','catfuser','testdb')
@@ -222,8 +223,18 @@ def masterLIST():
 			for row in filerow:
 				msg = msg + "(%s,%s,%s)" % (row[0],row[1],row[2])
 	except:
-		return "MASTER_LIST_ERROR"
-	return msg
+		return
+
+	try:
+		masterSock.send(msg)
+	except socket.error,e:
+		if "Connection refused" in e:
+			print "--- Connection Refused ---"
+	
+
+
+	
+
 
 def clientHandler(clientSock,clientAddr):
 	try:
@@ -252,7 +263,7 @@ def clientHandler(clientSock,clientAddr):
 		msg = regREP(clientSock,clientAddr)
 
 	elif int(query[0]) == 6: # MASTER LIST
-		msg = masterLIST()
+		msg = "Dummy Start"
 
 	else:
 		msg = "Invalid Query"
@@ -260,25 +271,8 @@ def clientHandler(clientSock,clientAddr):
 	clientSock.send(msg)
 	clientSock.close()
 	
-	if query[0] == 6:
-		time.sleep(1)
-		master = "localhost"
-		port = 3000
-		buf = 1234
-		global masterSock
-		masterSock = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-		masterSock.connect((master,port))
-		while True:
-			try:
-				masterSock.send("Test Connection...")
-				recvdata = masterSock.recv(buf)
-				if recvdata:
-					print recvdata
-					break
-			except socket.error,e:
-				if "Connection refused" in e:
-					print "--- Connection Refused ---"
-					break
+	if int(query[0]) == 6:
+		masterList()
 
 
 def resetDB():
