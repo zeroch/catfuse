@@ -144,6 +144,8 @@ int transfer_get(const char *remote, const char * filename)
 
     CURL *curl;
     CURLcode res;
+    printf("debug: %s\n", remote);
+    printf("debug: %s\n", filename);
     char local_name[256];
     strcpy(local_name, ROOT_DIR);
     strcat(local_name, "/");
@@ -161,6 +163,7 @@ int transfer_get(const char *remote, const char * filename)
     {
         char src_url[256];
         strcpy(src_url, remote);
+        strcat(src_url,"/");
         strncat(src_url, filename, 256);
 
         curl_easy_setopt(curl, CURLOPT_URL, src_url);

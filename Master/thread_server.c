@@ -59,6 +59,62 @@ char** str_split(char* a_str, const char a_delim)
 
 }
 
+void pull_parser(char *msg)
+{
+    char** tokens;
+
+    printf("msg=[%s]\n\n", msg);
+
+    tokens = str_split(msg, ',');
+    char  url[100];
+    strcpy(url, REMOTE_URL);
+
+    char qolon = ':';//character to search
+    
+
+    if (tokens)
+    {
+        int i;
+        for (i = 0; *(tokens + i); i++)
+        {
+
+
+            printf("string = %s\n", *(tokens + i));
+            // strcat(url, *(tokens + i));
+            
+            char *quotPtr = strchr( *(tokens + i), qolon);
+
+            if (quotPtr == NULL)
+            {
+                printf("debug: format Error\n");
+
+                free(*(tokens + i));
+                continue;
+            }
+            int position = quotPtr - *(tokens + i);
+            // strncpy(quotPtr, '\0', 1);
+            char f_name[100], m_location[20];
+            memset(f_name, 0, 100);
+            memset(m_location, 0, 20);
+
+            strncpy(f_name, *(tokens + i), position);
+            strcpy(m_location, *(tokens + i)+position+1);
+
+            printf("file=[%s]\n", f_name);
+            // use FTP at here. last file is dead. FIXME
+            char t_url[100];
+            memset(t_url, 0 , 100);
+            strcpy(t_url,url);
+            strcat(t_url,m_location);
+            printf("debug: location at %s\n", m_location);
+            printf("debug: location in url at %s\n", t_url);
+            transfer_get(t_url, f_name);
+            free(*(tokens + i));
+        }
+        printf("\n");
+        free(tokens);
+    }
+}
 
 void push_parser(char *msg)
 {
@@ -79,9 +135,10 @@ void push_parser(char *msg)
             {
                 printf("replica at %s\n", *(tokens + i));
                 strcat(url, *(tokens + i));
+                continue;
             }
             printf("file=[%s]\n", *(tokens + i));
-            // use FTP at here. 
+            // use FTP at here. last file is dead. FIXME
             printf("debug: %s\n", url);
             transfer_put(url, *(tokens + i));
             free(*(tokens + i));
@@ -113,7 +170,8 @@ void *handle(void *pnewsock)
             push_parser(client_message);
         }else if (!strcmp(cmd, "pull,"))
         {
-            puts("It is a pull");
+            pull_parser(client_message);
+
         } else {
             
             strcpy(client_message, "Test Connect");

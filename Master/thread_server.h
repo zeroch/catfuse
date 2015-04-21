@@ -20,6 +20,7 @@ int socket_init(void );
 int kick_start(void );
 char** str_split(char* a_str, const char a_delim);
 void push_parser(char *msg);
+void pull_parser(char *msg);
 
 
 
