@@ -173,7 +173,18 @@ void *handle(void *pnewsock)
             pull_parser(client_message);
             UpdateList(ROOT_DIR);
 
-        } else {
+        }else if (!strcmp(cmd, "whole"))
+        {
+            char t_buf[2000];
+            if (client_message[0] == '\0')
+            {
+                printf("emtpy list\n");
+                strcpy(client_message, "EMPTY");
+            }
+            compareListMaster(client_message, t_buf);
+            send(sock, t_buf, 2000, 0);
+        } 
+        else {
             
             strcpy(client_message, "Test Connect");
             send(sock, client_message, n, 0);

@@ -768,15 +768,13 @@ static int my_unlink(const char* path)
 
 int UpdateList(char* path){
 
-#ifdef REPLICA
+
   struct list_node *n,*p;
   list_for_each_safe (n, p, &entries) {
     struct ou_entry* o = list_entry(n, struct ou_entry, node);
     free(o);
   }
   list_init(&entries);
-
-#endif
 
   DIR* dp;
   struct dirent* de;

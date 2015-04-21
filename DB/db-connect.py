@@ -72,8 +72,6 @@ def dbGET(objID):
 '''
 
 def dbGET(objIDList):
-	if objIDList=="EMPTY":
-		return "EMPTY"
 	msg = "pull,"
 	objList = objIDList.split(":")
 	try:
@@ -227,9 +225,7 @@ def masterLIST():
 	except:
 		return
 	
-	if len(msg)==0:
-		msg = "EMPTY"
-
+	msg = "whole"+msg
 
 	recvdata = None
 	try:

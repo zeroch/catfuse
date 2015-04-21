@@ -130,7 +130,7 @@ void sendList(char* objList, char* server_reply, int replica_id){
   struct sockaddr_in server;
   int sockfd = socket(AF_INET,SOCK_STREAM,0);
   char message[2000];
-  sprintf(message,"4,replica_id,%s",objList);
+  sprintf(message,"4,replica_id,%d",objList);
   
   if (sockfd < 0){
     puts("Crete Socket Error");
