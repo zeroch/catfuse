@@ -154,7 +154,7 @@ int getDBList(){
 	  //db has newer version,compare hash to decide whether to acquire it
 	  if(strcmp(o->md5_hash,my_cache_list[i]->md5_hash)!=0){
 	    strcat(acquire_list,o->name);
-	    strcat(acquire_list,",");
+	    strcat(acquire_list,":");
 	  }
 	}
 	free(my_cache_list[i]);

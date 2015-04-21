@@ -18,25 +18,28 @@
 
 
 #ifdef M
-
-#define REMOTE_URL      "ftp://zeroc.at/tmp" // UPLOAD_FILE_AS
+#define REMOTE_URL      "ftp://zeroc.at/" // UPLOAD_FILE_AS
 #define ROOT_DIR 		"/home/zechen/fuse"
+#endif
 
-#elif YY
+#ifdef CA
+#define REMOTE_URL      "ftp://zeroc.at/cat1" // UPLOAD_FILE_AS
+#define ROOT_DIR 		"/home/zechen/cat"
+#endif
 
+#ifdef YY
 #define REMOTE_URL      "ftp://localhost/remote_tmp" // UPLOAD_FILE_AS
 #define ROOT_DIR 		"/tmp"
+#endif
 
-#elif CX
-
+#ifdef CX
 #define REMOTE_URL      "ftp://zeroc.at/cat1" // UPLOAD_FILE_AS
 #define ROOT_DIR 		"/home/catgt/cat1"
+#endif
 
-#elif CY
-
+#ifdef CY
 #define REMOTE_URL      "ftp://zeroc.at/cat2" // UPLOAD_FILE_AS
 #define ROOT_DIR 		"/home/catgt/cat1"
-
 #endif
 
 

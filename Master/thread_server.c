@@ -69,6 +69,7 @@ void push_parser(char *msg)
 
     tokens = str_split(msg, ',');
     char * url[100];
+    strcpy(url, REMOTE_URL);
     if (tokens)
     {
         int i;
@@ -77,10 +78,11 @@ void push_parser(char *msg)
             if (i == 0)
             {
                 printf("replica at %s\n", *(tokens + i));
-                strcpy(url, *(tokens + i));
+                strcat(url, *(tokens + i));
             }
             printf("file=[%s]\n", *(tokens + i));
             // use FTP at here. 
+            printf("debug: %s\n", url);
             transfer_put(url, *(tokens + i));
             free(*(tokens + i));
         }
