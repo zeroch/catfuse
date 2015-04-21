@@ -109,13 +109,21 @@ void *handle(void *pnewsock)
         if (!strcmp(cmd, "push,"))
         {
             push_parser(client_message);
-        }else {
+        }else if (!strcmp(cmd, "pull,"))
+        {
             puts("It is a pull");
+        } else {
+            
+            strcpy(client_message, "Test Connect");
+            send(sock, client_message, n, 0);
+
+
         }
 
-        strcpy(sendBuf, client_message);
-        printf("sending message: echo %s", sendBuf);
-        send(sock, client_message, n, 0);
+
+
+        // strcpy(sendBuf, client_message);
+        // printf("sending message: echo %s", sendBuf);
         if (n == 0)
         {
             puts("client disconnected");

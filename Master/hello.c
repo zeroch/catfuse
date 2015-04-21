@@ -215,9 +215,14 @@ void update_md5(struct ou_entry* entry){
   
   
   char full_path[MAX_NAMELEN];
-  fullPath(full_path, entry->name);
+  char t_name[MAX_NAMELEN];
+  strcpy(t_name, "/");
+  strcat(t_name, entry->name);
+  fullPath(full_path, t_name);
   // sprintf(full_path,"/tmp/%s",entry->name);
+  printf("debug: %s\n", full_path);
   FILE* pFile = fopen(full_path, "r");
+  printf("This is at MASTERx\n");
   if(pFile==NULL){
     return;
   }
@@ -234,8 +239,10 @@ void update_md5(struct ou_entry* entry){
   for(h=0;h<16;h++){
     sprintf(md5_hex+2*h,"%02x",md5_digest[h]);
   }
+  printf("This is at MASTER1\n");
 
 #ifdef MASTER
+  printf("This is at MASTER\n");
   postContent(entry->name,(int)entry->tv.tv_sec,md5_hex,server_reply);
   //error checking
   int retry=0;
@@ -243,9 +250,13 @@ void update_md5(struct ou_entry* entry){
     postContent(entry->name,(int)entry->tv.tv_sec,md5_hex,server_reply);
     retry++;
   }
+  printf("DEBUG: here\n");
+
+
 #endif
 
   strcpy(entry->md5_hash,md5_hex);
+  printf("DEBUG: fuck\n");
 
   #ifdef DEBUG
   writeLogFile(entry->md5_hash);
@@ -468,7 +479,7 @@ static int my_write(const char *path, const char *buf, size_t size,
     if (strcmp(path + 1, o->name) == 0) {
       o->tv.tv_sec = time(NULL);
       update_md5(o);
-      transfer_put(REMOTE_URL, o->name);
+      // transfer_put(REMOTE_URL, o->name);
       return res;
     }
   }
@@ -497,7 +508,7 @@ static int my_rename(const char *from, const char *to)
   int res;
   res = rename(from, to);
   printf("this is rename from: %s, and goto : %s\n", from, to );
-  transfer_get(from, to);
+  // transfer_get(from, to);
   if (res == -1)
     return -errno;
 
@@ -616,7 +627,7 @@ static int my_unlink(const char* path)
       __list_del(n);
       res = unlink(whole_path);
 
-      transfer_delete(o->name);
+      // transfer_delete(o->name);
 
       if(res==-1)
 	       return -errno;
