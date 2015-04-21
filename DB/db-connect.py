@@ -5,10 +5,10 @@ import thread
 import hashlib
 import time
 
-MAX_REPLICA = 3 #The maximum number of Replica Nodes here
+MAX_REPLICA = 4 #The maximum number of Replica Nodes here
 REPLICA_COUNT = MAX_REPLICA #Keep track of how many replica can still register until table is full
-REPLICA_PER_FILE = MAX_REPLICA  #Number of Replica to upload a file to
-RANDOM_NUMBER = 3 #Used to randomly determine ReplicaID to upload a file to in whichReplicaID Function
+REPLICA_PER_FILE = 3  #Number of Replica to upload a file to
+RANDOM_NUMBER = 4 #Used to randomly determine ReplicaID to upload a file to in whichReplicaID Function
 
 #static socket to connect with master
 masterSock = None
@@ -142,7 +142,6 @@ def dbLIST(clientSock,clientAddr,replicaID):
 				msg = msg + "(%s,%s,%s)" % (subrow[0][0],subrow[0][1],subrow[0][2])
 	except:
 		return "LIST_ERROR"
-	print "List sent to replica..."
 	return msg			
 
 
@@ -250,7 +249,6 @@ def masterLIST():
 		if "Connection refused" in e:
 			print "--- Connection Refused ---"
 	
-	print recvdata + "123"
 	msg = dbGET(recvdata)
 	print "send data:",msg
 
