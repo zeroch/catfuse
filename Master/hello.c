@@ -16,28 +16,44 @@
 #include <fcntl.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <time.h>
 
+#include <dirent.h>
+#include "hello.h"
 
-#include "list.h"
-#include "testdb.h"
-#include "md5.h"
-
-#define MAX_NAMELEN 255
-#define DEBUG
-
-extern void MD5_Init(MD5_CTX *ctx);
-extern void MD5_Update(MD5_CTX *ctx, const void *data, unsigned long size);
-extern void MD5_Final(unsigned char *result, MD5_CTX *ctx);
 
 FILE* log_file;
 
+int replica_id = -1;
+static struct list_node entries;
+
 struct ou_entry {
+  struct list_node node;
   mode_t mode;
   struct timespec tv;
-  unsigned char md5_hash[16];
-  struct list_node node;
+  char md5_hash[33];
   char name[MAX_NAMELEN + 1];
 };
+
+struct cache_index{
+  char name[MAX_NAMELEN + 1];
+  char version[20];
+  char md5_hash[32];
+};
+
+static void fullPath(char fpath[MAX_NAMELEN], const char * path)
+{
+  strcpy(fpath, ROOT_DIR);
+  strncat(fpath, path, MAX_NAMELEN);
+}
+
+static void full_path_from_name(char fpath[MAX_NAMELEN], const char * path)
+{
+  strcpy(fpath, ROOT_DIR);
+  strcat(fpath, "/");
+  strncat(fpath, path, MAX_NAMELEN);
+}
+
 
 void writeLogFile(char* data){
   #ifdef DEBUG
@@ -47,37 +63,319 @@ void writeLogFile(char* data){
   #endif
 }
 
+int compareListMaster(char* list_reply, char* acquire_list){
+  struct list_node *n;
+  struct list_node *p;
+  int res;
+  printf("inside compare function %s",list_reply);
+  
+  struct cache_index* my_cache_list[30] = { 0 };
+  /* currently use a static array of size 30, if have time may have a linked list */
+  
+  //parse list                                                                
+  if(strcmp(list_reply,"EMPTY")==0){
+    strcpy(acquire_list,"EMPTY");
+    return -1;
+  }
+
+  char delete_file[30][MAX_NAMELEN];
+  int file_to_delete = 0;
+  int i;
+  int obj_num=0;
+  int obj_field=0;
+  int infield_index=0;
+  for(i=0;i<2000;i++){
+    char tmp_char = list_reply[i];
+    if(tmp_char==')'){
+      obj_num++;
+      obj_field = 0;
+      infield_index=0;
+      if(list_reply[i+1]!='('){
+	break;
+      }
+    }else if(tmp_char=='('){
+      //initialize object                                                                   
+      my_cache_list[obj_num] = malloc(sizeof(struct cache_index));
+      memset(my_cache_list[obj_num]->name,0,MAX_NAMELEN+1);
+      memset(my_cache_list[obj_num]->version,0,20);
+      memset(my_cache_list[obj_num]->md5_hash,0,32);
+    }else if(tmp_char==','){
+      obj_field++;
+      infield_index=0;
+    }else{
+      switch(obj_field){
+      case 0:
+	my_cache_list[obj_num]->name[infield_index] = tmp_char;
+	break;
+      case 1:
+	my_cache_list[obj_num]->version[infield_index] = tmp_char;
+	break;
+      case 2:
+	my_cache_list[obj_num]->md5_hash[infield_index] = tmp_char;
+	break;
+      }
+      infield_index++;
+    }
+
+  }
+
+  //search newer version
+  list_for_each (n, &entries) {
+    struct ou_entry* o = list_entry(n, struct ou_entry, node);
+    for(i=0; i<30; i++){
+      if(my_cache_list[i]!=NULL && strcmp(my_cache_list[i]->name,o->name)==0){
+	int db_timestamp = atoi(my_cache_list[i]->version);
+	if(db_timestamp<=o->tv.tv_sec){
+	  //ignore it
+	}else{
+	  //db has newer version,compare hash to decide whether to acquire it
+	  if(strcmp(o->md5_hash,my_cache_list[i]->md5_hash)!=0){
+	    strcat(acquire_list,o->name);
+	    strcat(acquire_list,":");
+	  }
+	}
+	free(my_cache_list[i]);
+	my_cache_list[i] = NULL;
+	break;
+      }
+    }
+    //file not found, build delete list
+    if(i==30&&strcmp(o->name,".")!=0&&strcmp(o->name,"..")!=0){
+      strcpy(delete_file[file_to_delete],o->name);
+      file_to_delete++;
+    }
+  }
+
+  /*  
+  //delete file not exist in database
+  for(i=0; i<file_to_delete; i++){
+    list_for_each_safe (n, p, &entries) {
+      struct ou_entry* o = list_entry(n, struct ou_entry, node);
+      if (strcmp(delete_file[i], o->name) == 0) {
+	__list_del(n);
+	char fullpath[MAX_NAMELEN];
+	full_path_from_name(fullpath, o->name);
+	res = unlink(fullpath);
+	if(res==-1)
+	  return -errno;
+	free(o);
+	break;
+      }
+    }
+    }*/
+
+  //search new file
+  for(i=0; i<30; i++){
+    if(my_cache_list[i]!=NULL){
+      strcat(acquire_list, my_cache_list[i]->name);
+      strcat(acquire_list,":");
+      free(my_cache_list[i]);
+      my_cache_list[i] = NULL;
+    }
+  }
+
+  if(strcmp(acquire_list,"")==0){
+    strcpy(acquire_list,"EMPTY");
+  }
+  
+  return 0;
+}
+
+
+
+int getDBList(){
+  
+  if(replica_id==-1){
+    replica_id = regReplica();
+  }
+
+
+  struct list_node *n;
+  struct list_node *p;
+  int res;
+  
+  //get list                                                                  
+  char list_reply[2000];
+  struct cache_index* my_cache_list[30] = { 0 };
+  /* currently use a static array of size 30, if have time may have a linked list */
+  listContent(list_reply, replica_id);
+
+  //parse list                                                                
+  if(strcmp(list_reply,"EMPTY")==0){
+    //writeLogFile("Empty!");
+    return 0;
+  }
+
+  char delete_file[30][MAX_NAMELEN];
+  int file_to_delete = 0;
+  int i;
+  int obj_num=0;
+  int obj_field=0;
+  int infield_index=0;
+  for(i=0;i<2000;i++){
+    char tmp_char = list_reply[i];
+    if(tmp_char==')'){
+      obj_num++;
+      obj_field = 0;
+      infield_index=0;
+      if(list_reply[i+1]!='('){
+	break;
+      }
+    }else if(tmp_char=='('){
+      //initialize object                                                                   
+      my_cache_list[obj_num] = malloc(sizeof(struct cache_index));
+      memset(my_cache_list[obj_num]->name,0,MAX_NAMELEN+1);
+      memset(my_cache_list[obj_num]->version,0,20);
+      memset(my_cache_list[obj_num]->md5_hash,0,32);
+    }else if(tmp_char==','){
+      obj_field++;
+      infield_index=0;
+    }else{
+      switch(obj_field){
+      case 0:
+	my_cache_list[obj_num]->name[infield_index] = tmp_char;
+	break;
+      case 1:
+	my_cache_list[obj_num]->version[infield_index] = tmp_char;
+	break;
+      case 2:
+	my_cache_list[obj_num]->md5_hash[infield_index] = tmp_char;
+	break;
+      }
+      infield_index++;
+    }
+
+  }
+
+  char acquire_list[2000];
+  strcpy(acquire_list, "");
+
+
+  //search newer version
+  list_for_each (n, &entries) {
+    struct ou_entry* o = list_entry(n, struct ou_entry, node);
+    for(i=0; i<30; i++){
+      if(my_cache_list[i]!=NULL && strcmp(my_cache_list[i]->name,o->name)==0){
+	int db_timestamp = atoi(my_cache_list[i]->version);
+	if(db_timestamp<=o->tv.tv_sec){
+	  //ignore it
+	}else{
+	  //db has newer version,compare hash to decide whether to acquire it
+	  if(strcmp(o->md5_hash,my_cache_list[i]->md5_hash)!=0){
+	    strcat(acquire_list,o->name);
+	    strcat(acquire_list,":");
+	  }
+	}
+	free(my_cache_list[i]);
+	my_cache_list[i] = NULL;
+	break;
+      }
+    }
+    //file not found, build delete list
+    if(i==30&&strcmp(o->name,".")!=0&&strcmp(o->name,"..")!=0){
+      strcpy(delete_file[file_to_delete],o->name);
+      file_to_delete++;
+    }
+  }
+  
+  //delete file not exist in database
+  for(i=0; i<file_to_delete; i++){
+    list_for_each_safe (n, p, &entries) {
+      struct ou_entry* o = list_entry(n, struct ou_entry, node);
+      if (strcmp(delete_file[i], o->name) == 0) {
+	__list_del(n);
+	char fullpath[MAX_NAMELEN];
+	full_path_from_name(fullpath, o->name);
+	res = unlink(fullpath);
+	if(res==-1)
+	  return -errno;
+	free(o);
+	break;
+      }
+    }
+  }
+
+  //search new file
+  for(i=0; i<30; i++){
+    if(my_cache_list[i]!=NULL){
+      strcat(acquire_list, my_cache_list[i]->name);
+      strcat(acquire_list,":");
+      free(my_cache_list[i]);
+      my_cache_list[i] = NULL;
+    }
+  }
+
+  if(strcmp(acquire_list,"")==0){
+    strcpy(acquire_list,"EMPTY");
+  }
+  
+  char server_reply[2000];
+  sendList(acquire_list,server_reply,replica_id);
+  int retry = 0;
+  while(strcmp(server_reply,"REQUEST_OK")!=0 && retry<MAX_RETRY){
+    sendList(acquire_list, server_reply, replica_id);
+  }
+
+  return 0;
+  
+
+}
 
 void update_md5(struct ou_entry* entry){
-  char md5_data[MAX_NAMELEN];
-  sprintf(md5_data, "%s%d", entry->name, (int)entry->tv.tv_sec);
+  char md5_data[1024];
+  char md5_hex[33];
+  unsigned char md5_digest[16];
+  //sprintf(md5_data, "%s%d", entry->name, (int)entry->tv.tv_sec);
   MD5_CTX context;
   MD5_Init(&context);
-  MD5_Update(&context, md5_data, strlen(md5_data));
-  MD5_Final(entry->md5_hash, &context);
+  
+  
+  char full_path[MAX_NAMELEN];
+  full_path_from_name(full_path, entry->name);
+  printf("debug: %s\n", full_path);
+  FILE* pFile = fopen(full_path, "r");
+  printf("This is at MASTERx\n");
+  if(pFile==NULL){
+    return;
+  }
+  int bytes;
+  while((bytes = fread(md5_data,1,1024,pFile))!=0){
+    MD5_Update(&context, md5_data, bytes);
+  }
+  fclose(pFile);
+  //MD5_Update(&context, md5_data, strlen(md5_data));
+  MD5_Final(md5_digest, &context);
   
   char server_reply[100];
-  postContent(entry->name,(int)entry->tv.tv_sec,entry->md5_hash,server_reply);
+  int h;
+  for(h=0;h<16;h++){
+    sprintf(md5_hex+2*h,"%02x",md5_digest[h]);
+  }
+  printf("This is at MASTER1\n");
+
+#ifdef MASTER
+  printf("This is at MASTER\n");
+  postContent(entry->name,(int)entry->tv.tv_sec,md5_hex,server_reply);
+  //error checking
+  int retry=0;
+  while(strcmp(server_reply,"POST_OK")!=0 && retry<MAX_RETRY){
+    postContent(entry->name,(int)entry->tv.tv_sec,md5_hex,server_reply);
+    retry++;
+  }
+  printf("DEBUG: here\n");
+
+
+#endif
+
+  strcpy(entry->md5_hash,md5_hex);
+  printf("DEBUG: fuck\n");
 
   #ifdef DEBUG
-  char log_msg[100];
-  int i;
-  for(i=0;i<16;i++){
-    sprintf(log_msg+i,"%x",entry->md5_hash[i]);
-  }
-  writeLogFile(log_msg);
+  writeLogFile(entry->md5_hash);
   writeLogFile(server_reply);
   #endif
 }
 
-  
-static void fullPath(char fpath[MAX_NAMELEN], const char * path)
-{
-    strcpy(fpath, "/tmp");
-    strncat(fpath, path, MAX_NAMELEN);
-}
-
-static struct list_node entries;
 
 static int my_getattr(const char *path, struct stat *st)
 {
@@ -93,31 +391,31 @@ static int my_getattr(const char *path, struct stat *st)
     st->st_size = 0;
 
     list_for_each (n, &entries) {
-      struct ou_entry* o = list_entry(n, struct ou_entry, node);
+      //struct ou_entry* o = list_entry(n, struct ou_entry, node);
       ++st->st_nlink;
-      st->st_size += strlen(o->name);
+      st->st_size += 1;
     }
 
     return 0;
   }
-
+  
   //read regular file
   char whole_path[MAX_NAMELEN];
-  sprintf(whole_path,"/tmp%s",path);
+  fullPath(whole_path, path);
   int res;
-  list_for_each (n, &entries) {
-    struct ou_entry* o = list_entry(n, struct ou_entry, node);
-    if (strcmp(path + 1, o->name) == 0) {
-      res = lstat(whole_path, st);
-      if(res==-1)
-	return -errno;
-      st->st_mode = o->mode;
-      st->st_nlink = 1;
-      return 0;
-    }
-  }
 
-  return -ENOENT;
+  res = lstat(whole_path,st);
+  if(res==-1)
+    return -errno;
+  /*list_for_each (n, &entries) {                                               
+    struct ou_entry* o = list_entry(n, struct ou_entry, node);                 
+    if (strcmp(path + 1, o->name) == 0) {                                      
+      st->st_mode = o->mode;                                                   
+      return 0;                                                                
+    }                                                                          
+    } */
+
+  return 0;
 }
 
 static int my_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
@@ -126,13 +424,18 @@ static int my_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
   (void) offset;
   (void) fi;
 
+#ifdef REPLICA
+  UpdateList(ROOT_DIR);
+  getDBList();
+#endif
+
   struct list_node* n;
 
   if (strcmp(path, "/") != 0)
     return -ENOENT;
 
-  filler(buf, ".", NULL, 0);
-  filler(buf, "..", NULL, 0);
+  //filler(buf, ".", NULL, 0);
+  //filler(buf, "..", NULL, 0);
 
   list_for_each (n, &entries) {
   struct ou_entry* o = list_entry(n, struct ou_entry, node);
@@ -156,6 +459,7 @@ static int my_mkdir(const char * path, mode_t mode)
         ret = -errno;
         printf("error: mkdir mkdir\n");
     }
+
     return ret;
 
 }
@@ -165,7 +469,7 @@ static int my_utimens(const char *path, const struct timespec ts[2])
 {
   int res;
   char whole_path[MAX_NAMELEN];
-  sprintf(whole_path,"/tmp%s",path);
+  fullPath(whole_path, path);
 
 #ifndef OSX
   res = utimensat(0, whole_path, ts, AT_SYMLINK_NOFOLLOW);
@@ -197,18 +501,20 @@ static int my_utimens(const char *path, const struct timespec ts[2])
   return -ENOENT;
 }
 
+
 static int my_chmod(const char * path, mode_t new_mode)
 {
   int res;
   char whole_path[MAX_NAMELEN];
-  sprintf(whole_path,"/tmp%s",path);
+  fullPath(whole_path, path);
 
   res = chmod(whole_path, new_mode);
   if (res == -1)
     return -errno;
 
+  struct list_node *n;
+
   //maintain our own mode
-  struct list_node* n;
   list_for_each (n, &entries) {
     struct ou_entry* o = list_entry(n, struct ou_entry, node);
     if (strcmp(path + 1, o->name) == 0) {
@@ -226,7 +532,7 @@ static int my_chown(const char * path, uid_t uid, gid_t gid)
 {
   int res;
   char whole_path[MAX_NAMELEN];
-  sprintf(whole_path,"/tmp%s",path);
+  fullPath(whole_path, path);
 
   res = chown(whole_path, uid, gid);
   if (res == -1)
@@ -243,7 +549,7 @@ static int my_open(const char *path, struct fuse_file_info *fi)
 {
   int res = 0;
   char whole_path[MAX_NAMELEN];
-  sprintf(whole_path,"/tmp%s",path);
+  fullPath(whole_path, path);
 
   res = open(whole_path, fi->flags);
   if(res==-1)
@@ -280,7 +586,18 @@ static int my_write(const char *path, const char *buf, size_t size,
     res = -errno;
   close(fi->fh);
 
-  /*after test db, I'll decide whether to update hash here*/
+  struct list_node* n;
+  list_for_each (n, &entries) {
+    struct ou_entry* o = list_entry(n, struct ou_entry, node);
+    if (strcmp(path + 1, o->name) == 0) {
+      o->tv.tv_sec = time(NULL);
+      update_md5(o);
+      // transfer_put(REMOTE_URL, o->name);
+      return res;
+    }
+  }
+
+
 
   return res;
 
@@ -291,7 +608,7 @@ static int my_truncate(const char *path, off_t size)
   int res;
 
   char whole_path[MAX_NAMELEN];
-  sprintf(whole_path,"/tmp%s",path);
+  fullPath(whole_path, path);
 
   res = truncate(whole_path, size);
   if (res == -1)
@@ -303,8 +620,11 @@ static int my_rename(const char *from, const char *to)
 {
   int res;
   res = rename(from, to);
+  printf("this is rename from: %s, and goto : %s\n", from, to );
+  // transfer_get(from, to);
   if (res == -1)
     return -errno;
+
   return 0;
 }
 
@@ -375,19 +695,32 @@ static int my_create(const char* path, mode_t mode, struct fuse_file_info* fi)
 
   o = malloc(sizeof(struct ou_entry));
   strcpy(o->name, path + 1); /* skip leading '/' */
-  o->mode = mode | S_IFREG;
+  #ifdef MASTER
+  o->mode = 0660 | S_IFREG;
+  #endif
+  #ifdef REPLICA
+  o->mode = 0660 | S_IFREG;
+  #endif
+
   list_add_prev(&o->node, &entries);
 
   char whole_path[MAX_NAMELEN];
-  sprintf(whole_path,"/tmp%s",path);
+  fullPath(whole_path, path);
 
-  int res = creat(whole_path, S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP);
+  
+  int res = 0;
+  #ifdef MASTER
+  res = creat(whole_path, S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP);
+  #endif
+  #ifdef REPLICA
+  res = creat(whole_path, S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP);
+  #endif
+
   if(res==-1){
     return -errno;
   }
 
   fi->fh = res;
-
   //writeLogFile("File Created!");
 
   return 0;
@@ -396,17 +729,36 @@ static int my_create(const char* path, mode_t mode, struct fuse_file_info* fi)
 static int my_unlink(const char* path)
 {
   struct list_node *n, *p;
+  
+
   char whole_path[MAX_NAMELEN];
-  sprintf(whole_path,"/tmp%s",path);
+  fullPath(whole_path, path);
   int res;
   list_for_each_safe (n, p, &entries) {
     struct ou_entry* o = list_entry(n, struct ou_entry, node);
     if (strcmp(path + 1, o->name) == 0) {
       __list_del(n);
-      free(o);
       res = unlink(whole_path);
+
+      // transfer_delete(o->name);
+
       if(res==-1)
-	return -errno;
+	       return -errno;
+
+      #ifdef MASTER
+      //tell db to delete record
+      char server_reply[100];
+      delContent(o->name,server_reply);
+      int retry=0;
+      
+
+      while(strcmp(server_reply,"DELETE_OK")!=0&&retry<MAX_RETRY){
+	delContent(o->name,server_reply);
+	retry++;
+      }
+      #endif
+
+      free(o);
       return res;
     }
   }
@@ -414,6 +766,51 @@ static int my_unlink(const char* path)
 
   return -ENOENT;
 }
+
+int UpdateList(char* path){
+
+
+  struct list_node *n,*p;
+  list_for_each_safe (n, p, &entries) {
+    struct ou_entry* o = list_entry(n, struct ou_entry, node);
+    free(o);
+  }
+  list_init(&entries);
+
+  DIR* dp;
+  struct dirent* de;
+
+  dp = opendir(path);
+  if(dp==NULL){
+    return -errno;
+  }
+
+  struct ou_entry* o;
+  
+  while((de = readdir(dp))!=NULL){
+    o = malloc(sizeof(struct ou_entry));
+    strcpy(o->name,de->d_name);
+
+    printf("%s",o->name);
+    char full_path[MAX_NAMELEN];
+    full_path_from_name(full_path, o->name);
+    // sprintf(full_path,"/tmp/%s",o->name);
+    struct stat* stbuf = malloc(sizeof(struct stat));
+    memset(stbuf, 0, sizeof(struct stat));
+    lstat(full_path, stbuf);
+    o->mode = stbuf->st_mode;
+    o->tv.tv_sec = stbuf->st_mtime;
+    free(stbuf);
+
+    list_add_prev(&o->node, &entries);
+  }
+
+  closedir(dp);
+  
+  return 0;
+}
+
+
 
 static struct fuse_operations hello_oper = {
   .getattr= my_getattr,
@@ -432,14 +829,94 @@ static struct fuse_operations hello_oper = {
   .mkdir = my_mkdir,
 };
 
+
+
+
 int main(int argc, char *argv[])
 {
-  #ifdef DEBUG
-  log_file = fopen("/tmp/__my__log__","a");
-  #endif
+    
+    #ifdef DEBUG
+        log_file = fopen("/mylog/log","a");
+    #endif
+
   list_init(&entries);
+
+#ifdef MASTER
+    // socket_init();
+    kick_start();
+    UpdateList(ROOT_DIR);
+
+  
+    int sock;
+    pthread_t thread;
+    struct addrinfo hints, *ret;
+    int reuseaddr = 1; /* True */
+
+
+
+    /* Get the address info */
+    memset(&hints, 0, sizeof hints);
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+    if (getaddrinfo(NULL, PORT, &hints, &ret) != 0) {
+        perror("getaddrinfo");
+        return 1;
+    }
+
+    /* Create the socket */
+    sock = socket(ret->ai_family, ret->ai_socktype, ret->ai_protocol);
+    if (sock == -1) {
+        perror("socket");
+        return 1;
+    }
+    puts("Socket created");
+
+    /* Enable the socket to reuse the address */
+    if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &reuseaddr, sizeof(int)) == -1) {
+        perror("setsockopt");
+        return 1;
+    }
+
+    /* Bind to the address */
+    if (bind(sock, ret->ai_addr, ret->ai_addrlen) == -1) {
+        perror("bind");
+        return 0;
+    }
+    puts("bind done");
+
+    freeaddrinfo(ret);
+
+    /* Listen */
+    if (listen(sock, BACKLOG) == -1) {
+        perror("listen");
+        return 0;
+    }
+    puts("Waiting for incoming connections...");
+
+    /* Main loop */
+    
+    while (1) {
+        size_t size = sizeof(struct sockaddr_in);
+        struct sockaddr_in their_addr;
+        size_t newsock = accept(sock, (socklen_t *)&their_addr, &size);
+        if (newsock == -1) {
+            perror("accept");
+        }
+        else {
+            printf("Got a connection from %s on port %d\n", 
+                    inet_ntoa(their_addr.sin_addr), htons(their_addr.sin_port));
+            if (pthread_create(&thread, NULL, handle, &newsock) != 0) {
+                fprintf(stderr, "Failed to create thread\n");
+            }
+            break;
+        }
+	}
+
+#endif
   int res = fuse_main(argc, argv, &hello_oper, NULL);
   
+
+
   #ifdef DEBUG
   fclose(log_file);
   #endif
